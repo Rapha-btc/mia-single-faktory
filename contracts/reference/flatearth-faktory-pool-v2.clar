@@ -1,4 +1,5 @@
 
+    ;; SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.flatearth-faktory-pool-v2
     (impl-trait 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.charisma-traits-v1.sip010-ft-trait)
     (impl-trait 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.dexterity-traits-v0.liquidity-pool-trait)
 
