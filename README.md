@@ -61,7 +61,7 @@ Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par co
 - CCD013 economics (sim/live): 934.28M MIA burned for 1,597,626 STX (confirms 1710/1M).
 - MIA mining treasury (`ccd002-treasury-mia-mining-v3`): ~10.24M STX; ~16,772 STX/cycle reward.
 - MIA v2: `SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2`; sBTC: `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token`.
-- **CCIP-026 is not yet deployed on mainnet** — so par is computed self-contained (live supply + treasury), not read from the DAO.
+- Par is computed self-contained at init (live MIA supply + mining treasury).
 
 Design notes live in [`DECISIONS.md`](./DECISIONS.md).
 
