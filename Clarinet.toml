@@ -6,36 +6,35 @@ telemetry = false
 cache_dir = "./.cache"
 
 requirements = [
-    { contract_id = 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.ccd001-direct-execute' },
-    { contract_id = 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.extension-trait' },
-    { contract_id = 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.base-dao' },
-    { contract_id = 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.ccd002-treasury-mia-rewards-v3' },
-    { contract_id = 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-core-v1-patch' },
+    { contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' },
+    { contract_id = 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2' },
+    { contract_id = 'SP466FNC0P7JWTNM2R9T199QRZN1MYEDTAR0KP27.miamicoin-token' },
+    { contract_id = 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.charisma-traits-v1' },
+    { contract_id = 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.dexterity-traits-v0' },
 ]
 
 # ---------------------------------------------------------------------------
-# Reference contracts (unmodified on-chain copies, kept only for side-by-side
-# diffing while we amend). Not part of the deployable set.
+# Standalone set (step 3 drafts, uncommitted). Deploy under SPV9K21 on mainnet;
+# the sibling cross-calls (mia-sbtc-pool / mia-single-faktory) resolve there.
 # ---------------------------------------------------------------------------
-[contracts.ref-ccd014-fair-burn-to-exit-mia]
-path = "contracts/reference/ccd014-fair-burn-to-exit-mia.clar"
+[contracts.mia-pool-faktory]
+path = "contracts/mia-pool-faktory.clar"
+clarity_version = 3
+epoch = "3.4"
+
+[contracts.mia-single-faktory]
+path = "contracts/mia-single-faktory.clar"
 clarity_version = 5
 epoch = "3.4"
 
-[contracts.ref-ccd013-burn-to-exit-mia]
-path = "contracts/reference/ccd013-burn-to-exit-mia.clar"
+[contracts.mia-fair-faktory]
+path = "contracts/mia-fair-faktory.clar"
 clarity_version = 5
 epoch = "3.4"
 
-[contracts.ref-flat-single-faktory]
-path = "contracts/reference/flat-single-faktory.clar"
-clarity_version = 3
-epoch = "3.1"
-
-[contracts.ref-flatearth-faktory-pool-v2]
-path = "contracts/reference/flatearth-faktory-pool-v2.clar"
-clarity_version = 3
-epoch = "3.1"
+# NOTE: contracts/reference/*.clar are unmodified on-chain copies kept ONLY for
+# side-by-side diffing. They call mainnet contracts not in requirements, so they
+# are intentionally excluded from the build.
 
 [repl.analysis]
 passes = ["check_checker"]
