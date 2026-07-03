@@ -5,7 +5,7 @@
 // MIA supply + mining treasury for the par snapshot):
 //
 //   1. deploy pool -> single -> fair under SPV9K21 (F-6 address coupling)
-//   2. fair.initialize          -> par snapshot (live ratio; 2025 as of 2026-07-03)
+//   2. fair.initialize          -> par copied from LIVE ccd013 (frozen u1710)
 //   3. three MIA whales place below-par offers (9M MIA total), book sorts
 //      cheapest-first
 //   4. a whitehat settler (STX-rich) settles the whole book for 12,900 STX:
@@ -113,7 +113,10 @@ deploy("mia-fair-faktory");
 
 call("initialize by non-admin -> err u13000", STRANGER, FAIR_CID, "initialize", [], "(err u13000)");
 call("initialize (admin) -> ok", DEPLOYER, FAIR_CID, "initialize", [], /^\(ok /);
-evalc("par ratio (live)", "(get-info)", "info0");
+evalc("par ratio (copied from live ccd013)", "(get-info)", "info0");
+evalc("live ccd013 frozen ratio",
+  "(contract-call? 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia get-redemption-ratio)",
+  "ccd013ratio");
 
 // =====================================================================
 // Act 2 -- MIA whales place below-par offers (A first, C cheapest)
@@ -286,12 +289,10 @@ async function main() {
 
   // par math: par-equiv = floor(spent * 1e6 / ratio); surplus = acquired - par-equiv
   const ratio = num(captured.info0, "redemption-ratio");
-  const treasury = num(captured.info0, "mining-treasury-ustx");
-  const supply = num(captured.info0, "total-supply");
   const parEquiv = num(captured.settleResult, "par-equiv");
   const surplus = num(captured.settleResult, "surplus");
-  check("ratio == floor(treasury*1e6/supply)", ratio, (treasury * 1_000_000n) / supply);
-  check("live par ratio sane (1500..3000)", ratio >= 1500n && ratio <= 3000n, true);
+  check("our par == live ccd013 frozen ratio", ratio, bare(captured.ccd013ratio));
+  check("par is the DAO's canonical 1710", ratio, 1710n);
   check("par-equiv == floor(spent*1e6/ratio)", parEquiv, (TOTAL_SPENT * 1_000_000n) / ratio);
   check("surplus == acquired - par-equiv", surplus, TOTAL_ACQUIRED - parEquiv);
   check("surplus recorded in contract info", num(captured.info1, "surplus-mia"), surplus);

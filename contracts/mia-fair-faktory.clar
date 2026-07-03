@@ -3,7 +3,7 @@
 ;;   offer book, but settlement is funded by the CALLER's own STX (not the DAO
 ;;   rewards treasury) and the escrowed MIA is ACQUIRED, not burned. The settler
 ;;   receives only the par-equivalent of the STX they spent -- i.e. they buy MIA
-;;   at par (~1710), ABOVE market, so settling is deliberately unprofitable: a
+;;   at par (1710), ABOVE market, so settling is deliberately unprofitable: a
 ;;   pure whitehat anyone may run. The below-par SPREAD is captured HERE and
 ;;   accumulates across cycles to seed the single-sided MIA/sBTC pool on fak.fun.
 ;;
@@ -25,16 +25,19 @@
 ;;   6. Clarity 5: uses `current-contract` (no CONTRACT constant); every MIA the
 ;;      contract sends out (refund, par-equiv payout, seed) runs under
 ;;      `as-contract?` with an exact post-condition.
+;;   7. PAR SOURCE: the ratio is COPIED from the live DAO redemption
+;;      (SP2PABAF9....ccd013-burn-to-exit-mia, frozen u1710) at initialize --
+;;      NOT recomputed from live supply/treasury like ccd014 does. Recomputing
+;;      today gives ~2025 (redemptions burned ~935M MIA since ccd013's
+;;      snapshot), which would let sellers ask above the DAO's actual 1710
+;;      conversion rate and silently cost the whitehat ~16% on the round trip.
 
 ;; CONSTANTS
 
 (define-constant ERR_UNAUTHORIZED (err u13000))
-(define-constant ERR_PANIC (err u13001))
-(define-constant ERR_GETTING_TOTAL_SUPPLY (err u13002))
-(define-constant ERR_GETTING_REDEMPTION_BALANCE (err u13003))
+(define-constant ERR_REFERENCE_NOT_ENABLED (err u13001)) ;; live ccd013 not initialized / zero ratio
 (define-constant ERR_ALREADY_ENABLED (err u13004))
 (define-constant ERR_NOT_ENABLED (err u13005))
-(define-constant ERR_SUPPLY_CALCULATION (err u13009))
 (define-constant ERR_ABOVE_PAR (err u13012))
 (define-constant ERR_INVALID_OFFER (err u13013))
 (define-constant ERR_OFFER_NOT_FOUND (err u13014))
@@ -47,17 +50,15 @@
 (define-constant MAX_PER_TRANSACTION (* u10000000 MICRO_CITYCOINS)) ;; 10M MIA
 (define-constant MAX_OFFERS u50)
 
-(define-constant MIA_TOKEN_V1 'SP466FNC0P7JWTNM2R9T199QRZN1MYEDTAR0KP27.miamicoin-token)
 (define-constant MIA_TOKEN_V2 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2)
-(define-constant MIA_MINING_TREASURY 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.ccd002-treasury-mia-mining-v3)
+;; the LIVE DAO redemption (frozen ratio u1710) -- our canonical par reference
+(define-constant CCD013 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia)
 (define-constant SINGLE_SIDED .mia-single-faktory)
 
 ;; DATA VARS
 (define-data-var admin principal tx-sender)           ;; admin: gates initialize + seed only
 (define-data-var redemptions-enabled bool false)
-(define-data-var total-supply uint u0)               ;; combined v1*1e6 + v2 snapshot at init
-(define-data-var mining-treasury-ustx uint u0)       ;; mining treasury snapshot at init
-(define-data-var redemption-ratio uint u0)           ;; par: uSTX-per-uMIA * 1e6 (~1710)
+(define-data-var redemption-ratio uint u0)            ;; par copied from live ccd013 (u1710)
 (define-data-var total-settled uint u0)              ;; cumulative uMIA acquired via settle
 (define-data-var total-spent uint u0)                ;; cumulative uSTX settlers paid out
 (define-data-var surplus-mia uint u0)                ;; retained below-par MIA, awaiting seeding
@@ -82,24 +83,19 @@
   )
 )
 
-;; Snapshot par from live chain state (same formula as ccd014, reads only). No
-;; DAO auth / treasury mutation -- gated to owner. One-shot.
+;; Copy par from the LIVE ccd013 (its ratio is frozen/immutable after its own
+;; init, so this is the DAO's canonical redemption rate -- NOT recomputed from
+;; live supply, which would drift above 1710 as redemptions burn supply and
+;; break the settler's neutrality vs the real conversion rate). One-shot.
 (define-public (initialize)
   (let (
-      (supply-v1 (unwrap! (contract-call? MIA_TOKEN_V1 get-total-supply) ERR_PANIC))
-      (supply-v2 (unwrap! (contract-call? MIA_TOKEN_V2 get-total-supply) ERR_PANIC))
-      (supply (+ (* supply-v1 MICRO_CITYCOINS) supply-v2))
-      (treasury (get-mining-treasury-total-balance))
-      (ratio (calculate-redemption-ratio treasury supply))
+      (ratio (contract-call? CCD013 get-redemption-ratio))
     )
     (asserts! (is-admin) ERR_UNAUTHORIZED)
     (asserts! (not (var-get redemptions-enabled)) ERR_ALREADY_ENABLED)
-    (asserts! (> supply u0) ERR_GETTING_TOTAL_SUPPLY)
-    (asserts! (> treasury u0) ERR_GETTING_REDEMPTION_BALANCE)
-    (asserts! (is-some ratio) ERR_SUPPLY_CALCULATION)
-    (var-set total-supply supply)
-    (var-set mining-treasury-ustx treasury)
-    (var-set redemption-ratio (unwrap-panic ratio))
+    (asserts! (and (contract-call? CCD013 is-redemption-enabled) (> ratio u0))
+      ERR_REFERENCE_NOT_ENABLED)
+    (var-set redemption-ratio ratio)
     (var-set redemptions-enabled true)
     (ok (print { notification: "initialize", payload: (get-info) }))
   )
@@ -221,19 +217,6 @@
 
 ;; PRIVATE / READ-ONLY
 
-(define-read-only (get-mining-treasury-total-balance)
-  (let ((acc (stx-account MIA_MINING_TREASURY)))
-    (+ (get locked acc) (get unlocked acc))
-  )
-)
-
-(define-private (calculate-redemption-ratio (balance uint) (supply uint))
-  (if (or (is-eq supply u0) (is-eq balance u0))
-    none
-    (some (/ (* balance REDEMPTION_SCALE_FACTOR) supply))
-  )
-)
-
 ;; STX value at par for `amount` uMIA v2, using the frozen ratio.
 (define-read-only (get-par-ustx (amount uint))
   (/ (* (var-get redemption-ratio) amount) REDEMPTION_SCALE_FACTOR)
@@ -332,8 +315,7 @@
     admin: (var-get admin),
     enabled: (var-get redemptions-enabled),
     redemption-ratio: (var-get redemption-ratio),
-    total-supply: (var-get total-supply),
-    mining-treasury-ustx: (var-get mining-treasury-ustx),
+    reference: CCD013,
     total-settled: (var-get total-settled),
     total-spent: (var-get total-spent),
     surplus-mia: (var-get surplus-mia),
