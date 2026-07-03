@@ -1,44 +1,52 @@
 # mia-single-faktory
 
-Standalone contracts for the **Fast Pool whitehat-MEV** loop on the CityCoins
-MIA burn-to-exit market, plus a **single-sided MIA/sBTC pool** on fak.fun that
-recycles the arb MIA into community liquidity.
+A **whitehat exit auction** for CityCoins MIA that spins up a **new sBTC market
+for MIA** on fak.fun — anyone can provide sBTC single-sided and earn a bonus.
 
-## The idea (Rapha ↔ Friedger design thread)
+## How it works (plain version)
 
-CCD014 (`ccd014-fair-burn-to-exit-mia`) runs an **offer book**: MIA holders
-escrow MIA and bid at or below **par** (the frozen redemption ratio, ~**1710 STX
-per 1M MIA**) to exit early. Today two bots race to settle the book. Fast Pool
-already receives the mining-reward STX (~16.7k STX/cycle) and can settle it
-itself, as a **whitehat** rather than for profit:
+**1. An exit auction for MIA holders.** Holders who want out early escrow MIA
+and name a price at or below par (~**1710 STX / 1M MIA**). Settlement fills the
+**cheapest — most-in-pain — offers first**, first-come-first-serve on ties. The
+people most eager to exit get prioritized at the rate they'll accept, instead of
+a flat rate that just rewards whoever's fastest.
 
-- **Read the book first.** Only act when there's escrowed MIA bidding *below*
-  par — no mempool guessing, the profit is already sitting there.
-- **Settle with the caller's own STX** (not the DAO treasury), and **acquire**
-  the MIA instead of burning it.
-- The settler receives only the **par-equivalent** of the STX they spent — i.e.
-  they buy MIA *at par* (~1710), which is above market (~1027), so settling is
-  deliberately unprofitable: anyone may do it, but only a whitehat will.
-- The below-par **spread** is captured and accumulates, then seeds the MIA side
-  of a **single-sided pool** on fak.fun where the community supplies only sBTC.
-- MIA gains a **second pool** (STX on Alex + sBTC on fak.fun) → a sustainable
-  arb source for bots instead of a one-shot book scoop. Short horizon: pox-5
-  lands in ~2–3 cycles and changes the reward game.
+**2. Fast Pool settles it as a whitehat.** Today bots race to capture the gap
+between those below-par offers and par. Fast Pool settles the book itself: it
+pays offers from its own STX and only ever recovers the *par-equivalent*, so it
+takes **no profit**. The **below-par spread** (the discount sellers accepted) is
+captured by the contract instead of a bot.
+
+**3. That spread opens a single-sided sBTC pool.** The captured MIA seeds a
+**MIA/sBTC pool on fak.fun** that anyone can join by supplying **only sBTC**:
+- The MIA side is already there (from the captured spread) — you bring just sBTC.
+- Your position is locked **~3 months**.
+- On unlock you keep **60% of your LP** — a **20% bonus** over the 50% a fair
+  split would return (the extra is subsidized by the arb's MIA). It's an LP
+  position, so it tracks the MIA/sBTC pool.
+- The other **40% stays in the pool permanently**, deepening the market.
+
+**4. Why it matters.** MIA now trades in **two venues** — STX on Alex and sBTC
+on fak.fun — opening a standing arbitrage loop between them. That gives bots a
+*sustainable* source of activity instead of a one-shot book scoop, and means
+more liquidity and price discovery for MIA. Short horizon: pox-5 lands in ~2–3
+cycles and changes the reward game.
+
+*Origin: CityCoins Discord — DerekS.btc proposed a below-par burn auction, Rapha
+reframed it to prioritize the most-in-pain exits, built on top of Friedger's
+CCIP-026.*
 
 ## Contracts (`contracts/`)
 
-Deploy order is **pool → single → fair** (`mia-fair-faktory` calls into
-`mia-single-faktory`; the single-sided references the accumulator only as a
-value, so no cycle).
+Deploy order is **pool → single → fair**.
 
 | contract | clarity | role |
 |---|---|---|
-| **`mia-fair-faktory.clar`** | 5 / epoch 3.4 | Fork of ccd014. Permissionless, **caller-funded** `settle-offers`; settler gets par-equiv MIA, the below-par **spread** is retained in `surplus-mia`; `seed-single-sided` pushes it into the offering. NOT a DAO extension (admin-gated `initialize`/`seed`; no treasury payout, no `revoke-delegate-stx`). Par computed self-contained at init from live MIA v1+v2 supply + mining treasury. `current-contract` + `as-contract?` post-conditions on every MIA payout. |
+| **`mia-fair-faktory.clar`** | 5 / epoch 3.4 | Fork of ccd014. Permissionless, **caller-funded** `settle-offers`; the settler gets only par-equiv MIA, the below-par **spread** is retained in `surplus-mia`; `seed-single-sided` pushes it into the offering. NOT a DAO extension (admin-gated `initialize`/`seed`; no treasury payout, no `revoke-delegate-stx`). Par computed self-contained at init from live MIA v1+v2 supply + mining treasury. `current-contract` + `as-contract?` post-conditions on every MIA payout. |
 | **`mia-single-faktory.clar`** | 5 / epoch 3.4 | Single-sided offering. `DEPOSITOR` (= `mia-fair-faktory`) seeds MIA **repeatably** (clock anchored on the first seed). Community supplies only sBTC — **no entry deadline** (open while the contract holds unpaired MIA). ~90-day lock; on unlock the user keeps **60%** of their LP, the other **40% stays locked in the pool forever**. `current-contract` + `as-contract?`. |
 | **`mia-pool-faktory.clar`** | 3 / epoch 3.4 | MIA(v2)/sBTC constant-product AMM — **verbatim** port of `flatearth-faktory-pool-v2` (battle-tested Clarity-3 template) aside from the token/LP swap. `initialize-pool` does **not** auto-approve a swap caller, so swaps stay **gated** until the admin opens them — the anti-imbalance lever while the single-sided offering takes deposits. |
 
-Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par
-computation).
+Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par computation).
 
 ### `contracts/reference/` — unmodified on-chain copies, for diffing only (not built)
 | file | source |
@@ -50,10 +58,12 @@ computation).
 
 ## Key on-chain facts (mainnet, verified)
 - Redemption ratio (par): **1710** → `uMIA = uSTX * 1e6 / 1710`.
-- CCD013 economics (from sim/live state): 934.28M MIA burned for 1,597,626 STX (confirms 1710/1M).
+- CCD013 economics (sim/live): 934.28M MIA burned for 1,597,626 STX (confirms 1710/1M).
 - MIA mining treasury (`ccd002-treasury-mia-mining-v3`): ~10.24M STX; ~16,772 STX/cycle reward.
 - MIA v2: `SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2`; sBTC: `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token`.
 - **CCIP-026 is not yet deployed on mainnet** — so par is computed self-contained (live supply + treasury), not read from the DAO.
+
+Design notes live in [`DECISIONS.md`](./DECISIONS.md).
 
 ## Status
 - `clarinet check` → **✔ 3 contracts checked** (clarinet 3.19 and 3.21).

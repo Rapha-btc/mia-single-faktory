@@ -273,7 +273,9 @@
     (try! (contract-call? MIA_TOKEN_V2 transfer (get amount r) current-contract (get owner r) none)))
 )
 
-;; Sorted insert: new <= entry  <=>  nask * eamount <= eask * namount
+;; Sorted insert, cheapest-first. STRICT `<` so a same-priced newcomer lands
+;; AFTER existing equal-price offers (first-come-first-serve on ties, per
+;; Friedger): new < entry  <=>  nask * eumia < eask * numia
 (define-private (insert-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
@@ -289,7 +291,7 @@
       (eask (get ustx entry))
       (eumia (get amount entry))
     )
-    (if (and (not (get placed acc)) (<= (* nask eumia) (* eask numia)))
+    (if (and (not (get placed acc)) (< (* nask eumia) (* eask numia)))
       (merge acc { out: (push-rec (push-rec (get out acc) nrec) entry), placed: true })
       (merge acc { out: (push-rec (get out acc) entry) })
     )
