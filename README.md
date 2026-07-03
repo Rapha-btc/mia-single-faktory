@@ -89,13 +89,41 @@ address-coupled, see AUDIT F-6).
 Design notes live in [`DECISIONS.md`](./DECISIONS.md); the structured contract
 review lives in [`AUDIT.md`](./AUDIT.md).
 
-## Status
-- Clarity **6** / epoch **4.0** (clarinet 3.21); `clarinet check` → ✔.
+## Deployed (mainnet, 2026-07-03)
+
+| contract | id |
+|---|---|
+| pool | `SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-pool-faktory` |
+| single | `SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-single-faktory` |
+| fair | `SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-fair-faktory` |
+
+Deployed at **Clarity 5** (mainnet rejects version byte 6; every construct used
+— `current-contract`, `as-contract?`/`with-ft` — is Clarity-5). UI:
+[fak.fun/m/mia](https://fak.fun/m/mia) · story:
+[fak.fun/m/blog/mia-fair-exit](https://fak.fun/m/blog/mia-fair-exit).
+
+## Verification
+
+- `clarinet check` → ✔ 3 contracts (repo manifest at Clarity 6 / epoch 4.0 for analysis).
 - **68 unit tests** (Clarinet SDK + vitest) green, including a full
   end-to-end run of the auction → seed → deposit → gate → 60/40 unlock story.
 - **Fuzzed with Rendezvous 1.x**: 3 contracts × property + invariant modes,
-  zero failures (see [`rendezvous/README.md`](./rendezvous/README.md)).
-- Not deployed. No UI yet (next: stxer sim, then the simple UI).
+  zero failures (see [`rendezvous/README.md`](./rendezvous/README.md)); audit +
+  dispositions in [`AUDIT.md`](./AUDIT.md).
+- **stxer mainnet-fork sims** (self-verifying, exit non-zero on any failure):
+  - `npm run sim:happy` — full lifecycle from fresh deploys, **46/46**:
+    [run](https://stxer.xyz/simulations/mainnet/931933e40784527147b308eb220f8537)
+  - `npm run sim:deployed` — the same arc against the **LIVE on-chain bytecode**
+    (no deploys), **43/43**:
+    [run](https://stxer.xyz/simulations/mainnet/35bf36c99ea5a6d967b13b7898060372).
+    Covers the pending admin `initialize` (par copied from live ccd013 = u1710),
+    real MIA whales placing 9M MIA of offers, a whitehat settling for 12,900 STX
+    (sellers paid their exact asks, settler receives exactly par-equiv, 1.456M MIA
+    spread retained), pool seeding while gated, vault seeding, community sBTC
+    deposits, every guard (u403 gated swap, u406 dust, u407 early withdraw,
+    u408 no-deposit, u13005/12/16/17), gate opening, both swap directions with
+    exact faktory fees, a 12,960-block advance, and the 60/40 exit with 120k LP
+    provably locked forever.
 
 ## Build & test
 ```bash
