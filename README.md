@@ -25,9 +25,11 @@ deposit is locked **~3 months**; on unlock you keep **60% of your position (a
 **40% stays in the pool for good**, permanently deepening the market.
 
 **The net effect.** MIA ends up trading in **two places** — STX on Alex and sBTC
-on fak.fun — which opens a standing arbitrage loop between them: a sustainable,
-healthy source of volume for MIA instead of a one-time scramble. Short horizon:
-pox-5 lands in ~2–3 cycles and changes the reward game.
+on fak.fun — opening a standing arbitrage loop between them. The bots that today
+race to grab the **one-shot** book scoop get a **sustainable** arb source
+instead: the one-time extraction is taken away and replaced with ongoing, healthy
+volume that benefits MIA. Short horizon: pox-5 lands in ~2–3 cycles and changes
+the reward game.
 
 *Sparked by a CityCoins community proposal for a below-par MIA burn auction,
 built on CCIP-026.*
