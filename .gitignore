@@ -1,0 +1,8 @@
+.cache/
+node_modules/
+history.txt
+coverage/
+*.log
+.DS_Store
+settings/Mainnet.toml
+settings/Testnet.toml
