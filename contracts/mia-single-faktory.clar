@@ -42,6 +42,10 @@
 (define-constant ERR_NO_DEPOSIT (err u408))
 (define-constant ERR_CALC_AMOUNTS (err u410))
 
+;; F-3: floor of 60% must be >= 1 to withdraw anything, i.e. entitlement >= 2
+;; micro-LP. Require 10x that per deposit so no one can strand a dust position.
+(define-constant MIN_LP_AMOUNT u20)
+
 (define-constant LOCK_PERIOD u12960)  ;; ~90 days in bitcoin blocks
 
 ;; user keeps 60% of their LP on unlock; 40% stays locked in the pool forever
@@ -102,10 +106,13 @@
           (lp-tokens-received (get dk lp-result))
           (current-lp (default-to u0 (map-get? user-lp-tokens tx-sender))))
 
-    ;; no entry deadline: pairing is open as long as the contract still holds
-    ;; unpaired MIA (add-liquidity fails once it's exhausted). No DEPOSITOR guard
-    ;; needed either -- mia-fair-faktory has no path that calls this.
+    ;; offering must have started. No time cap: deposits stay open as long as the
+    ;; contract holds unpaired MIA (add-liquidity fails once it's exhausted).
+    ;; Timing is irrelevant -- whenever you deposit, you keep 60% and 40% stays as
+    ;; permanent pool liquidity, which is the intended distribution of the MIA.
     (asserts! (> (var-get creation-block) u0) ERR_NOT_STARTED)
+    ;; F-3: reject dust deposits that could never withdraw (60% floors to 0)
+    (asserts! (>= lp-amount MIN_LP_AMOUNT) ERR_INSUFFICIENT_AMOUNT)
 
       (map-set user-lp-tokens tx-sender (+ current-lp lp-tokens-received))
       (var-set total-lp-tokens (+ (var-get total-lp-tokens) lp-tokens-received))

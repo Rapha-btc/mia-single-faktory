@@ -147,3 +147,24 @@ out more than it took in (`test-add-remove-roundtrip-no-profit`).
 | Unit (68 vitest tests) | `tests/*.test.ts` | exact-value math, auth, edges, full E2E story |
 | Property fuzz | `rendezvous/harnesses/*.tests.clar` (`npm run rv:*:test`) | escrow/accounting per call, no-profit properties, lock/split |
 | Invariant fuzz | same files (`npm run rv:*:invariant`) | state-machine safety under random call sequences |
+
+---
+
+## Team dispositions
+
+Our decision on each finding.
+
+| # | Sev | Disposition | Rationale |
+|---|---|---|---|
+| **F-1** | HIGH | **Fixed** (this PR) | Real — the gate was bypassable by direct wallet swaps. Escape hatch removed; while gated only approved callers swap. |
+| **F-2** | MED | **Fixed** (this PR) | Real — a whitehat with a resting offer could crash settle. Own offer now skipped. |
+| **F-3** | LOW | **Fixed** | Added `MIN_LP_AMOUNT u20` guard in `deposit-sbtc-for-lp` (10× the 2-microLP floor below which 60% rounds to 0). No one can strand a dust position. |
+| **F-4** | LOW | **Won't fix** | Cosmetic. `unwrap-panic` on an underfunded settle aborts (funds safe) instead of a clean error. The whitehat simply funds the budget; a balance pre-check is optional polish, not worth the extra code. |
+| **F-5** | LOW | **Accept (not a bug)** | No forfeit and no extraction: whenever a user deposits, they keep 60% (the 20% bonus) and 40% stays as permanent pool liquidity — that IS the intended distribution of the vault's MIA. A post-unlock instant deposit-withdraw just means the depositor supplied sBTC, took their bonus, and left 40% depth behind. Timing doesn't change the economics, so no cutoff is added. |
+| **F-6** | MED | **Accept (by design)** | The trio is intentionally address-coupled to `SPV9K21…`. We deploy under that address; the operating sequence (README) notes verifying the deployer before broadcast. |
+| **F-7** | LOW | **Accept (unreachable)** | Empty-pool divide-by-zero is only reachable pre-seeding; `initialize-pool` funds reserves and swaps are gated until then, so no one quotes/swaps an empty pool. |
+| **F-8** | LOW | **Accept (known)** | `tx-sender` admin auth is phishable only if the admin calls through an untrusted contract, which the operator won't do. Accepted; `set-token-uri`/`initialize-pool` already use `contract-caller`. |
+| **F-9** | INFO | **Accept (documented)** | Affordability-gated fills are economically harmless — the settler overpays either way and the spread stays non-negative (fuzz-verified). Noted for sellers. |
+| **F-10** | LOW | **Accept (harmless)** | Dust legs flooring to 0 revert the call; the flip side is a fuzz-verified property that no free LP is ever minted and round-trips never profit. |
+
+**Fixes landed:** F-1, F-2 (Clarity-6 pass) + F-3 (dust deposit guard). No open critical/high. Remaining findings accepted with rationale above.
