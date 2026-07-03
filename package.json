@@ -1,0 +1,31 @@
+{
+  "name": "mia-single-faktory-tests",
+  "version": "1.0.0",
+  "description": "Unit and fuzz tests for the mia-single-faktory contracts.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:report": "vitest run -- --coverage --costs",
+    "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test\"",
+    "rv:sync": "./scripts/rv-sync.sh",
+    "rv:fair:test": "npm run rv:sync && cd rendezvous && rv . mia-fair-faktory test",
+    "rv:fair:invariant": "npm run rv:sync && cd rendezvous && rv . mia-fair-faktory invariant",
+    "rv:single:test": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory test",
+    "rv:single:invariant": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory invariant",
+    "rv:pool:test": "npm run rv:sync && cd rendezvous && rv . mia-pool-faktory test",
+    "rv:pool:invariant": "npm run rv:sync && cd rendezvous && rv . mia-pool-faktory invariant",
+    "fuzz": "npm run rv:fair:test && npm run rv:fair:invariant && npm run rv:single:test && npm run rv:single:invariant && npm run rv:pool:test && npm run rv:pool:invariant"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@stacks/clarinet-sdk": "^3.16.0",
+    "@stacks/rendezvous": "^1.0.1",
+    "@stacks/transactions": "^7.4.0",
+    "@types/node": "^24.4.0",
+    "chokidar-cli": "^3.0.0",
+    "vitest": "^4.1.2",
+    "vitest-environment-clarinet": "^3.0.2"
+  }
+}

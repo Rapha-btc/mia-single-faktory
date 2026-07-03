@@ -1,0 +1,35 @@
+# Rendezvous (rv) fuzzing project — an isolated copy of the contracts with
+# test-only patches applied by scripts/rv-sync.sh (see rendezvous/README.md).
+# Run from the repo root:  npm run rv:fair:invariant  (etc.)
+[project]
+name = "mia-single-faktory-rendezvous"
+description = "Fuzzing harness for the mia-single-faktory contracts"
+authors = []
+telemetry = false
+cache_dir = "./.cache"
+
+requirements = [
+    { contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' },
+    { contract_id = 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2' },
+    { contract_id = 'SP466FNC0P7JWTNM2R9T199QRZN1MYEDTAR0KP27.miamicoin-token' },
+    { contract_id = 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.charisma-traits-v1' },
+    { contract_id = 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.dexterity-traits-v0' },
+]
+
+[contracts.mia-pool-faktory]
+path = "contracts/mia-pool-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mia-single-faktory]
+path = "contracts/mia-single-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mia-fair-faktory]
+path = "contracts/mia-fair-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[repl.analysis]
+passes = []

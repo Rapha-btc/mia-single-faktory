@@ -19,18 +19,18 @@ requirements = [
 # ---------------------------------------------------------------------------
 [contracts.mia-pool-faktory]
 path = "contracts/mia-pool-faktory.clar"
-clarity_version = 3
-epoch = "3.4"
+clarity_version = 6
+epoch = "4.0"
 
 [contracts.mia-single-faktory]
 path = "contracts/mia-single-faktory.clar"
-clarity_version = 5
-epoch = "3.4"
+clarity_version = 6
+epoch = "4.0"
 
 [contracts.mia-fair-faktory]
 path = "contracts/mia-fair-faktory.clar"
-clarity_version = 5
-epoch = "3.4"
+clarity_version = 6
+epoch = "4.0"
 
 # NOTE: contracts/reference/*.clar are unmodified on-chain copies kept ONLY for
 # side-by-side diffing. They call mainnet contracts not in requirements, so they

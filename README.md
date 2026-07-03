@@ -42,9 +42,9 @@ value, so no cycle).
 
 | contract | clarity | role |
 |---|---|---|
-| **`mia-fair-faktory.clar`** | 5 / epoch 3.4 | Fork of ccd014. Permissionless, **caller-funded** `settle-offers`; the settler gets only par-equiv MIA, the below-par **spread** is retained in `surplus-mia`; `seed-single-sided` pushes it into the offering. NOT a DAO extension (admin-gated `initialize`/`seed`; no treasury payout, no `revoke-delegate-stx`). Par computed self-contained at init from live MIA v1+v2 supply + mining treasury. `current-contract` + `as-contract?` post-conditions on every MIA payout. |
-| **`mia-single-faktory.clar`** | 5 / epoch 3.4 | Single-sided offering. `DEPOSITOR` (= `mia-fair-faktory`) seeds MIA **repeatably** (clock anchored on the first seed). Community supplies only sBTC — **no entry deadline** (open while the contract holds unpaired MIA). ~90-day lock; on unlock the user keeps **60%** of their LP, the other **40% stays locked in the pool forever**. `current-contract` + `as-contract?`. |
-| **`mia-pool-faktory.clar`** | 3 / epoch 3.4 | MIA(v2)/sBTC constant-product AMM — **verbatim** port of `flatearth-faktory-pool-v2` (battle-tested Clarity-3 template) aside from the token/LP swap. `initialize-pool` does **not** auto-approve a swap caller, so swaps stay **gated** until the admin opens them — the anti-imbalance lever while the single-sided offering takes deposits. |
+| **`mia-fair-faktory.clar`** | 6 / epoch 4.0 | Fork of ccd014. Permissionless, **caller-funded** `settle-offers`; the settler gets only par-equiv MIA, the below-par **spread** is retained in `surplus-mia`; `seed-single-sided` pushes it into the offering. NOT a DAO extension (admin-gated `initialize`/`seed`; no treasury payout, no `revoke-delegate-stx`). Par computed self-contained at init from live MIA v1+v2 supply + mining treasury. `current-contract` + `as-contract?` post-conditions on every MIA payout. A settler's own resting offer is always kept, never self-filled (AUDIT F-2). |
+| **`mia-single-faktory.clar`** | 6 / epoch 4.0 | Single-sided offering. `DEPOSITOR` (= `mia-fair-faktory`) seeds MIA **repeatably** (clock anchored on the first seed). Community supplies only sBTC — **no entry deadline** (open while the contract holds unpaired MIA). ~90-day lock; on unlock the user keeps **60%** of their LP, the other **40% stays locked in the pool forever**. `current-contract` + `as-contract?`. |
+| **`mia-pool-faktory.clar`** | 6 / epoch 4.0 | MIA(v2)/sBTC constant-product AMM — port of `flatearth-faktory-pool-v2` upgraded to Clarity 6 (plain `as-contract` no longer exists there: every outbound transfer now runs under `as-contract?` with an exact allowance). `initialize-pool` does **not** auto-approve a swap caller, so swaps stay **gated** until the admin opens them — the anti-imbalance lever while the single-sided offering takes deposits. Unlike the template, the gate holds against **direct wallet calls** too (AUDIT F-1). |
 
 Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par computation).
 
@@ -63,13 +63,30 @@ Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par co
 - MIA v2: `SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2`; sBTC: `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token`.
 - Par is computed self-contained at init (live MIA supply + mining treasury).
 
-Design notes live in [`DECISIONS.md`](./DECISIONS.md).
+Design notes live in [`DECISIONS.md`](./DECISIONS.md); the structured contract
+review lives in [`AUDIT.md`](./AUDIT.md).
 
 ## Status
-- `clarinet check` → **✔ 3 contracts checked** (clarinet 3.19 and 3.21).
-- Not deployed. No tests or UI yet (next: stxer sim + Clarinet SDK tests, then the simple UI).
+- Clarity **6** / epoch **4.0** (clarinet 3.21); `clarinet check` → ✔.
+- **68 unit tests** (Clarinet SDK + vitest) green, including a full
+  end-to-end run of the auction → seed → deposit → gate → 60/40 unlock story.
+- **Fuzzed with Rendezvous 1.x**: 3 contracts × property + invariant modes,
+  zero failures (see [`rendezvous/README.md`](./rendezvous/README.md)).
+- Not deployed. No UI yet (next: stxer sim, then the simple UI).
 
-## Build
+## Build & test
 ```bash
-clarinet check
+clarinet check      # type-check the contracts
+npm install
+npm test            # unit + integration suites (vitest + Clarinet SDK simnet)
+npm run fuzz        # all six rendezvous fuzz targets (or rv:<contract>:<mode>)
 ```
+
+Testing notes:
+- Unit suites fund mainnet-pinned tokens via simnet console commands
+  (`::mint_ft`, `::mint_stx`) and deploy the trio under the fak.fun deployer
+  address where the cross-contract wiring requires it (simnet cannot
+  impersonate contract principals).
+- Fuzzing runs in the isolated [`rendezvous/`](./rendezvous) project with four
+  documented test-only patches (deposit gate, lock length, pool gate, MIA
+  faucet).
