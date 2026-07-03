@@ -1,29 +1,3 @@
-;; Title: mia-pool-faktory
-;; Summary: Constant-product MIA(v2)/sBTC AMM for fak.fun. Port of
-;;   SPV9K21....flatearth-faktory-pool-v2 with token-b swapped to MIA v2 and the
-;;   behavioural changes called out below. Upgraded from the Clarity-3 template
-;;   to Clarity 6: `current-contract` replaces the as-contract-based constant and every
-;;   contract-held asset moves under `as-contract?` with an exact allowance.
-;;
-;; AMENDMENTS vs flatearth-faktory-pool-v2 (diff these side by side):
-;;   1. token-b: flat-earth-stxcity  ->  miamicoin-token-v2  (v2 only, per spec)
-;;   2. LP token: sBTC-FlatEarth      ->  sBTC-MIA
-;;   3. initialize-pool NO LONGER auto-approves fakfun-core-v2. Swaps stay GATED
-;;      (only `gated=false` or an approved-caller can swap) until the admin opens
-;;      them AFTER the single-sided entry window. This is the anti-imbalance
-;;      lever: while the single-sided offering is taking sBTC deposits, nobody
-;;      can move the pool ratio by swapping, so deposits always pair at the
-;;      seeded price and the standalone's MIA can't be sniped. add/remove
-;;      liquidity are NOT swap-gated, so the single-sided contract still works.
-;;   4. is-approved-caller DROPS the template's `(is-eq tx-sender contract-caller)`
-;;      escape hatch. In the template that clause lets ANY direct (wallet) call
-;;      swap while "gated", which would defeat amendment 3 entirely -- the gate
-;;      must hold against direct calls too, not just routers. While gated, only
-;;      explicitly approved callers can swap.
-;;   5. Clarity 6 port: plain `as-contract` no longer exists. Every outbound
-;;      transfer from the pool runs under `as-contract?` with a `with-ft`
-;;      allowance for exactly the amount sent.
-
 (impl-trait 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.charisma-traits-v1.sip010-ft-trait)
 (impl-trait 'SP2ZNGJ85ENDY6QRHQ5P2D4FXKGZWCKTB2T0Z55KS.dexterity-traits-v0.liquidity-pool-trait)
 
@@ -38,9 +12,6 @@
 (define-constant FAKTORY_FEE u1000)
 (define-constant FAKTORY_ADDRESS 'SMH8FRN30ERW1SX26NJTJCKTDR3H27NRJ6W75WQE)
 
-;; token-a = sBTC (SM3VDXK3....sbtc-token), token-b = MIA v2
-;; (SP1H1733....miamicoin-token-v2) -- referenced inline throughout, matching the
-;; flatearth-faktory-pool-v2 style.
 
 (define-constant OP_SWAP_A_TO_B 0x00)
 (define-constant OP_SWAP_B_TO_A 0x01)
@@ -147,8 +118,6 @@
         (and (var-get gated) (asserts! (is-approved-caller) ERR_UNAUTHORIZED))
         (asserts! (>= (- dy-d fee-d) min-y-out) ERR_TOO_MUCH_SLIPPAGE)
         (try! (contract-call? 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2 transfer amount sender current-contract none))
-        ;; one allowance covers both legs: (dy-d - fee-d) to the trader + fee-d
-        ;; to faktory = dy-d sBTC total leaving the pool
         (try! (as-contract? ((with-ft 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token "sbtc-token" dy-d))
                (try! (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token transfer (- dy-d fee-d) current-contract sender none))
                (if (> fee-d u0)
@@ -268,10 +237,6 @@
           dk: supply
         }))
 
-;; Seed initial reserves and depth. `lowest` sets the first proportional add
-;; (dx=dy=lowest since supply is 0), `highest` tops up the MIA side to set the
-;; starting price. AMENDMENT: does NOT approve fakfun-core-v2 here -- swaps stay
-;; gated until `approve-caller`/`set-gated` is called AFTER the entry window.
 (define-public (initialize-pool (lowest uint) (highest uint))
   (begin
      (asserts! (is-eq contract-caller DEPLOYER) ERR_UNAUTHORIZED)
@@ -306,9 +271,6 @@
   )
 )
 
-;; AMENDMENT 4: no `(is-eq tx-sender contract-caller)` escape hatch -- while
-;; gated, direct wallet calls must be blocked too, otherwise anyone could move
-;; the pool ratio during the single-sided entry window.
 (define-private (is-approved-caller)
     (default-to false (map-get? approved-callers contract-caller))
 )

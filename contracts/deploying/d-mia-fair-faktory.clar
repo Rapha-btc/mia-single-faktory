@@ -1,41 +1,5 @@
-;; Title: mia-fair-faktory  (permissionless whitehat settle + spread accumulator)
-;; Summary: STANDALONE fork of ccd014-fair-burn-to-exit-mia. Same below-par
-;;   offer book, but settlement is funded by the CALLER's own STX (not the DAO
-;;   rewards treasury) and the escrowed MIA is ACQUIRED, not burned. The settler
-;;   receives only the par-equivalent of the STX they spent -- i.e. they buy MIA
-;;   at par (1710), ABOVE market, so settling is deliberately unprofitable: a
-;;   pure whitehat anyone may run. The below-par SPREAD is captured HERE and
-;;   accumulates across cycles to seed the single-sided MIA/sBTC pool on fak.fun.
-;;
-;; AMENDMENTS vs reference/ccd014-fair-burn-to-exit-mia.clar (diff side by side):
-;;   1. NOT a DAO extension: no impl-trait, no is-dao-or-extension, no treasury
-;;      revoke-delegate. `owner` var (deployer) only gates initialize + seed.
-;;   2. v2 ONLY: dropped MIA v1 / core-v1-patch / is-v1 everywhere. Offer record
-;;      is {owner, amount(uMIA v2), ustx}.
-;;   3. settle-offers is PERMISSIONLESS and CALLER-FUNDED: pays each filled ask
-;;      in STX from tx-sender directly to the offer owner; no treasury, no burn.
-;;      Escrowed MIA stays in the contract. Rational actors won't call it (you
-;;      overpay at par); only a whitehat does -> "anyone is free, but illogical".
-;;   4. After a settle: par-equiv MIA (spent*1e6/ratio) goes to the settler;
-;;      the SPREAD (acquired - par-equiv) is retained in `surplus-mia` and
-;;      accumulates over 2-3 cycles. A single seed-single-sided call at the end
-;;      pushes it to the single-sided contract, which STARTS the offering then.
-;;   5. redeem-mia (the fixed-rate ccd013 path) is REMOVED -- this contract only
-;;      runs the offer book + arb; the DAO's own redemption is untouched.
-;;   6. Clarity 5: uses `current-contract` (no CONTRACT constant); every MIA the
-;;      contract sends out (refund, par-equiv payout, seed) runs under
-;;      `as-contract?` with an exact post-condition.
-;;   7. PAR SOURCE: the ratio is COPIED from the live DAO redemption
-;;      (SP2PABAF9....ccd013-burn-to-exit-mia, frozen u1710) at initialize --
-;;      NOT recomputed from live supply/treasury like ccd014 does. Recomputing
-;;      today gives ~2025 (redemptions burned ~935M MIA since ccd013's
-;;      snapshot), which would let sellers ask above the DAO's actual 1710
-;;      conversion rate and silently cost the whitehat ~16% on the round trip.
-
-;; CONSTANTS
-
 (define-constant ERR_UNAUTHORIZED (err u13000))
-(define-constant ERR_REFERENCE_NOT_ENABLED (err u13001)) ;; live ccd013 not initialized / zero ratio
+(define-constant ERR_REFERENCE_NOT_ENABLED (err u13001))
 (define-constant ERR_ALREADY_ENABLED (err u13004))
 (define-constant ERR_NOT_ENABLED (err u13005))
 (define-constant ERR_ABOVE_PAR (err u13012))
@@ -43,34 +7,30 @@
 (define-constant ERR_OFFER_NOT_FOUND (err u13014))
 (define-constant ERR_BOOK_FULL (err u13015))
 (define-constant ERR_HAS_OFFER (err u13016))
-(define-constant ERR_INSUFFICIENT_SURPLUS (err u13017)) ;; not enough retained surplus MIA to seed
+(define-constant ERR_INSUFFICIENT_SURPLUS (err u13017))
 
 (define-constant MICRO_CITYCOINS (pow u10 u6))
 (define-constant REDEMPTION_SCALE_FACTOR (pow u10 u6))
-(define-constant MAX_PER_TRANSACTION (* u10000000 MICRO_CITYCOINS)) ;; 10M MIA
+(define-constant MAX_PER_TRANSACTION (* u10000000 MICRO_CITYCOINS))
 (define-constant MAX_OFFERS u50)
 
 (define-constant MIA_TOKEN_V2 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2)
-;; the LIVE DAO redemption (frozen ratio u1710) -- our canonical par reference
 (define-constant CCD013 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia)
 (define-constant SINGLE_SIDED .mia-single-faktory)
 
-;; DATA VARS
-(define-data-var admin principal tx-sender)           ;; admin: gates initialize + seed only
+(define-data-var admin principal tx-sender)
 (define-data-var redemptions-enabled bool false)
-(define-data-var redemption-ratio uint u0)            ;; par copied from live ccd013 (u1710)
-(define-data-var total-settled uint u0)              ;; cumulative uMIA acquired via settle
-(define-data-var total-spent uint u0)                ;; cumulative uSTX settlers paid out
-(define-data-var surplus-mia uint u0)                ;; retained below-par MIA, awaiting seeding
+(define-data-var redemption-ratio uint u0)
+(define-data-var total-settled uint u0)
+(define-data-var total-spent uint u0)
+(define-data-var surplus-mia uint u0)
 
-;; v2-only offer book, sorted ascending by price (ustx/amount)
 (define-data-var offer-book
   (list 50 { owner: principal, amount: uint, ustx: uint })
   (list)
 )
 (define-data-var target-owner principal 'SP000000000000000000002Q6VF78)
 
-;; ADMIN
 
 (define-private (is-admin)
   (is-eq tx-sender (var-get admin))
@@ -83,10 +43,6 @@
   )
 )
 
-;; Copy par from the LIVE ccd013 (its ratio is frozen/immutable after its own
-;; init, so this is the DAO's canonical redemption rate -- NOT recomputed from
-;; live supply, which would drift above 1710 as redemptions burn supply and
-;; break the settler's neutrality vs the real conversion rate). One-shot.
 (define-public (initialize)
   (let (
       (ratio (contract-call? CCD013 get-redemption-ratio))
@@ -101,11 +57,7 @@
   )
 )
 
-;; OFFER BOOK (v2 only)
 
-;; Place a standing below-par offer: escrow `amount` v2 uMIA, ask `ask-ustx`.
-;; ask must be > 0 and <= par. One offer per wallet; sorted insert; full book
-;; evicts its worst (priciest) offer for a strictly cheaper newcomer.
 (define-public (place-offer (amount uint) (ask-ustx uint))
   (let (
       (owner tx-sender)
@@ -140,7 +92,6 @@
   )
 )
 
-;; Cancel your own open offer and get the escrowed MIA back.
 (define-public (cancel-offer)
   (let ((owner tx-sender))
     (var-set target-owner owner)
@@ -154,16 +105,8 @@
   )
 )
 
-;; SETTLE (permissionless, caller-funded)
-;;
-;; PERMISSIONLESS: anyone may call. `budget` caps the STX the caller will spend
-;; this call; the book is cheapest-first so it fills the most-pained offers
-;; first. Each fill pays the owner's ask in STX FROM THE CALLER and keeps the
-;; escrowed MIA here. Afterwards the settler receives the par-equivalent MIA
-;; (they buy at par, above market -> settling is unprofitable = whitehat), and
-;; the below-par SPREAD is retained in `surplus-mia` to accumulate across cycles.
 (define-public (settle-offers (budget uint))
-  (let ((settler tx-sender)) ;; capture before as-contract flips tx-sender
+  (let ((settler tx-sender))
     (asserts! (var-get redemptions-enabled) ERR_NOT_ENABLED)
     (let (
       (res (fold settle-step (var-get offer-book) {
@@ -180,12 +123,9 @@
       (surplus (if (> acquired par-equiv) (- acquired par-equiv) u0))
     )
     (var-set offer-book (get kept res))
-    ;; the settler gets the par-equivalent of the STX they spent (bought at par)
     (and (> par-equiv u0)
       (try! (as-contract? ((with-ft MIA_TOKEN_V2 "miamicoin" par-equiv))
              (try! (contract-call? MIA_TOKEN_V2 transfer par-equiv current-contract settler none)))))
-    ;; the below-par SPREAD stays here, accumulating over 2-3 cycles to seed the
-    ;; single-sided MIA/sBTC offering
     (var-set surplus-mia (+ (var-get surplus-mia) surplus))
     (var-set total-settled (+ (var-get total-settled) acquired))
     (var-set total-spent (+ (var-get total-spent) spent))
@@ -198,11 +138,6 @@
   )
 )
 
-;; Push retained spread MIA into the single-sided offering. Repeatable: the
-;; single-sided accumulates MIA and anchors its entry/lock clock on the FIRST
-;; seed. Admin-gated; runs as-contract? so the single-sided sees tx-sender =
-;; this contract (its DEPOSITOR) and pulls `amount` MIA from here (post-condition
-;; bounds exactly that).
 (define-public (seed-single-sided (amount uint))
   (begin
     (asserts! (is-admin) ERR_UNAUTHORIZED)
@@ -215,9 +150,7 @@
   )
 )
 
-;; PRIVATE / READ-ONLY
 
-;; STX value at par for `amount` uMIA v2, using the frozen ratio.
 (define-read-only (get-par-ustx (amount uint))
   (/ (* (var-get redemption-ratio) amount) REDEMPTION_SCALE_FACTOR)
 )
@@ -249,16 +182,11 @@
   (get found (fold find-owner-step (var-get offer-book) { target: owner, found: none })))
 (define-read-only (get-offer-count) (len (var-get offer-book)))
 
-;; Refund an escrowed record's v2 MIA to its owner, bounded by an exact
-;; post-condition (matches the ccd014 original's allowance-scoped as-contract?).
 (define-private (refund-rec (r { owner: principal, amount: uint, ustx: uint }))
   (as-contract? ((with-ft MIA_TOKEN_V2 "miamicoin" (get amount r)))
     (try! (contract-call? MIA_TOKEN_V2 transfer (get amount r) current-contract (get owner r) none)))
 )
 
-;; Sorted insert, cheapest-first. STRICT `<` so a same-priced newcomer lands
-;; AFTER existing equal-price offers (first-come-first-serve on ties, per
-;; Friedger): new < entry  <=>  nask * eumia < eask * numia
 (define-private (insert-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
@@ -281,11 +209,6 @@
   )
 )
 
-;; Fill an offer if the remaining budget covers its ask: pay the owner in STX
-;; from the caller, keep the escrowed MIA, accumulate spent/acquired. The
-;; caller's OWN offer is always kept: stx-transfer? to oneself errors, which
-;; the unwrap-panic would turn into a hard abort -- a settler who also has a
-;; resting offer must not crash (they can cancel it instead).
 (define-private (settle-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
