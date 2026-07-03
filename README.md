@@ -56,6 +56,29 @@ Only MIA **v2** is used for trading/escrow (v1 appears solely in the init par co
 | `flat-single-faktory.clar` | `SPV9K21…flat-single-faktory` — the single-sided template |
 | `flatearth-faktory-pool-v2.clar` | `SPV9K21…flatearth-faktory-pool-v2` — the AMM template |
 
+## Operating sequence
+
+Deploy order is **pool → single → fair** (all under `SPV9K21…` — the trio is
+address-coupled, see AUDIT F-6).
+
+1. **`fair.initialize`** — snapshot par (~1710) from live MIA supply + treasury.
+2. **whitehat `settle-offers`** — below-par offers filled; the spread accumulates
+   in `fair.surplus-mia`.
+3. **`pool.initialize-pool(lowest, highest)`** — admin seeds initial sBTC + MIA
+   depth at a *fair* starting price. **Swaps stay gated** (no approved caller).
+4. **`fair.seed-single-sided(amount)`** — push the accumulated MIA into the vault
+   (repeatable; the lock clock anchors on the first seed).
+5. **community `deposit-sbtc-for-lp`** — sBTC pairs with vault MIA at the frozen
+   ratio; LP locked ~3 months. While swaps are gated the price can't move, so
+   every deposit pairs fairly and the MIA can't be sniped.
+6. **open the market** — once the single-sided has done its job (MIA paired /
+   offering done), the admin **`approve-caller` for `fakfun-core-v2`** (or
+   `set-gated false`) to open swaps. This is the moment the second market goes
+   live and the Alex↔fak.fun arb loop begins. **Do not open swaps while unpaired
+   MIA remains** — that's the only window in which the vault could be sniped.
+7. **after the lock** — `withdraw-lp-tokens`: the user keeps 60% of their LP; the
+   other 40% stays in the pool permanently.
+
 ## Key on-chain facts (mainnet, verified)
 - Redemption ratio (par): **1710** → `uMIA = uSTX * 1e6 / 1710`.
 - CCD013 economics (sim/live): 934.28M MIA burned for 1,597,626 STX (confirms 1710/1M).
