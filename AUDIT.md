@@ -168,3 +168,42 @@ Our decision on each finding.
 | **F-10** | LOW | **Accept (harmless)** | Dust legs flooring to 0 revert the call; the flip side is a fuzz-verified property that no free LP is ever minted and round-trips never profit. |
 
 **Fixes landed:** F-1, F-2 (Clarity-6 pass) + F-3 (dust deposit guard). No open critical/high. Remaining findings accepted with rationale above.
+
+---
+
+## v2 addendum (frontier partial fill, 2026-07-03)
+
+`mia-fair-faktory-v2` + `mia-single-faktory-v2` (pool reused). Verified by
+stxer sim 71/71 (`npm run sim:v2`) and Rendezvous: all 10 targets (v1 trio +
+v2 pair, property + invariant modes), 100 runs each, **zero contract bugs**.
+
+### F-9 — RESOLVED by v2
+`settle-offers` now partial-fills the frontier offer with the whole remaining
+budget and stops, instead of skipping it and letting a pricier-per-MIA offer
+with a smaller absolute ask fill first. Strict price-time priority;
+`spent == min(budget, book total)` exactly (fuzz-verified property).
+
+### F-11 (INFO) — partial-fill floor rounding, bounded and maker-favorable
+Integer partial fills cannot keep both the maker's rate and the remainder's
+price exact; v2 floors `taken`, which protects the maker (never paid below
+their per-uMIA ask; full ask received across any split of fills — sim-verified
+to the digit) at the cost of the remainder's implied price dipping < 1 uMIA
+below its original per settle call. Consequences, each bounded by the
+settle-call count and fuzz-verified with that exact bound:
+- the book can be pairwise-"unsorted" by rounding dust next to a settler's
+  own resting offer;
+- cumulative `total-settled` can trail `floor(total-spent * 1e6 / ratio)` by
+  the same dust.
+The escrow ledger (`contract MIA == open offers + surplus-mia`), the par cap
+on every resting ask, and per-settle whitehat accounting (settler receives
+exactly par-equiv, surplus never negative) remain strict equalities.
+**Disposition: accept (inherent to integer pro-rata; maker-favorable).**
+
+### Fuzz-harness fixes shipped with v2 (not contract bugs)
+- fair harnesses were vacuous since the par source switched to the ccd013
+  copy: the simnet ccd013 deploys un-initialized, so `initialize` silently
+  failed and every fair run was discarded (rv also crashed when clarinet's
+  lazy resolution of the unlisted ccd013 hit Hiro rate limits). rv-sync
+  PATCH 5 freezes par at the mainnet-verified u1710 in the fuzz copies.
+- the single deposit property predated the F-3 dust guard; fuzzed LP amounts
+  now floor at `MIN_LP_AMOUNT`.
