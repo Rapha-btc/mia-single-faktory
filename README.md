@@ -102,9 +102,49 @@ Deployed at **Clarity 5** (mainnet rejects version byte 6; every construct used
 [fak.fun/m/mia](https://fak.fun/m/mia) · story:
 [fak.fun/m/blog/mia-fair-exit](https://fak.fun/m/blog/mia-fair-exit).
 
+## v2 — frontier partial fill (pending deploy)
+
+v1's `settle-offers` skips any offer whose full ask exceeds the remaining
+budget — and keeps scanning, so a pricier-per-MIA offer with a smaller
+absolute ask could still fill (a mild price-priority violation), and a
+settler's budget was never consumed exactly. **v2 partial-fills the frontier
+offer instead**: when `0 < remaining < ask`, the settler pays the owner the
+whole remainder, takes `taken = amount * remaining / ask` uMIA, and the
+record stays in the book shrunk to `{amount - taken, ustx - remaining}`.
+
+Properties (all sim-proven):
+- `taken` **floors**, so the maker is never paid below their ask per-uMIA;
+  the remainder's implied price stays ≤ its original price ≤ par, preserving
+  the below-par invariant and the ascending sort.
+- After a partial, `remaining` is u0 — **strict price-time priority** (the
+  v1 queue-jumping quirk is gone).
+- The remainder always keeps `amount ≥ 1` and `ustx ≥ 1`; a dust budget too
+  small to buy a single uMIA leaves the entry untouched.
+- `spent = min(budget, book total)` exactly → the settler's STX
+  post-condition can be an exact amount, and split settles **conserve
+  totals**: N partial settles pay every maker their full ask to the digit.
+- New read-only **`get-book-totals`** → `{ustx, amount}` — one call tells a
+  settler the budget that clears the whole book (any smaller budget is
+  consumed exactly).
+
+Only the two cross-referencing contracts get a v2 — **the pool is reused
+as-is** (it authorizes on `DEPLOYER`/approved-callers and never names its
+siblings; add/remove-liquidity are not swap-gated):
+
+| contract | change |
+|---|---|
+| `mia-fair-faktory-v2.clar` | partial-fill `settle-step`, `get-book-totals`, `SINGLE_SIDED → .mia-single-faktory-v2` |
+| `mia-single-faktory-v2.clar` | `DEPOSITOR → SPV9K21….mia-fair-faktory-v2` only (the constant is frozen at deploy) |
+
+Deploy order: **single-v2 → fair-v2** (fair-v2 cross-calls single-v2; the
+live pool is already on-chain). Migration: the v1 book currently holds one
+live offer (`SP1JAG6TV…AJV91`, 457,230 MIA @ 526.96 STX) — the maker must
+`cancel-offer` on v1 and re-place on v2, or a whitehat settles it on v1
+(v1's spread can only seed v1's single, not v2's).
+
 ## Verification
 
-- `clarinet check` → ✔ 3 contracts (repo manifest at Clarity 6 / epoch 4.0 for analysis).
+- `clarinet check` → ✔ 5 contracts (v1 trio + v2 pair; repo manifest at Clarity 6 / epoch 4.0 for analysis).
 - **68 unit tests** (Clarinet SDK + vitest) green, including a full
   end-to-end run of the auction → seed → deposit → gate → 60/40 unlock story.
 - **Fuzzed with Rendezvous 1.x**: 3 contracts × property + invariant modes,
@@ -124,6 +164,18 @@ Deployed at **Clarity 5** (mainnet rejects version byte 6; every construct used
     u408 no-deposit, u13005/12/16/17), gate opening, both swap directions with
     exact faktory fees, a 12,960-block advance, and the 60/40 exit with 120k LP
     provably locked forever.
+  - `npm run sim:v2` — the **v2 pair** deployed on the fork against the **LIVE
+    pool** (mirroring the real v2 deploy path; live pool verified uninitialized
+    2026-07-03), **71/71**:
+    [run](https://stxer.xyz/simulations/mainnet/ebd1f4048b58612d5f27012a6258f847).
+    Adds to the v1 arc: frontier partial (4,800 STX → C full + exactly half of
+    B, A untouched), a 1-uSTX micro fill taking a floor'd 714 uMIA, three split
+    settles conserving v1's exact totals (12,900 STX / 9M MIA, every maker paid
+    their full ask across split fills), cancel-after-partial refunding exactly
+    the shrunken remainder, the escrow invariant (fair-v2 MIA balance ==
+    `surplus-mia` to the digit with an empty book), `get-book-totals`
+    before/after each settle, and the DEPOSITOR rewiring guard (direct
+    `initialize-pool` on single-v2 → u403; only fair-v2 seeds the vault).
 
 ## Build & test
 ```bash
