@@ -3,7 +3,6 @@
 (define-constant MIA 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2)
 (define-constant DEPOSITOR 'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-fair-faktory-v2)
 
-
 (define-constant ERR_UNAUTHORIZED (err u403))
 (define-constant ERR_NOT_STARTED (err u404))
 (define-constant ERR_INSUFFICIENT_AMOUNT (err u406))

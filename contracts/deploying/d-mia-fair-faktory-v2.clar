@@ -178,8 +178,6 @@
 
 (define-read-only (get-offer-book) (var-get offer-book))
 
-;; total STX to clear the whole book (and the MIA escrowed behind it); any
-;; smaller budget is consumed exactly thanks to the frontier partial fill
 (define-private (sum-step
     (r { owner: principal, amount: uint, ustx: uint })
     (acc { ustx: uint, amount: uint })
@@ -220,14 +218,6 @@
   )
 )
 
-;; v2: partial fill on the frontier offer. When the remaining budget can't
-;; cover the full ask, consume the whole remainder into the entry pro-rata:
-;; taken floors, so the owner is paid `remaining` for slightly LESS than
-;; pro-rata MIA (never worse than their ask), and the leftover record's
-;; implied price is <= its original price <= par, preserving both the
-;; below-par invariant and the ascending sort. After a partial, remaining
-;; is u0, so no later (pricier) offer can jump the queue with a smaller
-;; absolute ask -- strict price-time priority.
 (define-private (settle-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
@@ -242,7 +232,6 @@
       (ask (get ustx entry))
     )
     (if (is-eq (get owner entry) tx-sender)
-      ;; settler's own resting offer: never touch it (self stx-transfer errors)
       (merge acc { kept: (push-rec (get kept acc) entry) })
       (if (>= remaining ask)
         (begin
@@ -254,8 +243,6 @@
           })
         )
         (let ((taken (/ (* (get amount entry) remaining) ask)))
-          ;; taken = u0 covers both remaining = u0 and dust budgets smaller
-          ;; than the price of a single uMIA: keep the entry untouched
           (if (> taken u0)
             (begin
               (unwrap-panic (stx-transfer? remaining tx-sender (get owner entry)))
