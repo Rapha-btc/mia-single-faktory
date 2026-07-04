@@ -15,7 +15,11 @@
     "rv:single:invariant": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory invariant",
     "rv:pool:test": "npm run rv:sync && cd rendezvous && rv . mia-pool-faktory test",
     "rv:pool:invariant": "npm run rv:sync && cd rendezvous && rv . mia-pool-faktory invariant",
-    "fuzz": "npm run rv:fair:test && npm run rv:fair:invariant && npm run rv:single:test && npm run rv:single:invariant && npm run rv:pool:test && npm run rv:pool:invariant",
+    "rv:fair-v2:test": "npm run rv:sync && cd rendezvous && rv . mia-fair-faktory-v2 test",
+    "rv:fair-v2:invariant": "npm run rv:sync && cd rendezvous && rv . mia-fair-faktory-v2 invariant",
+    "rv:single-v2:test": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory-v2 test",
+    "rv:single-v2:invariant": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory-v2 invariant",
+    "fuzz": "npm run rv:fair:test && npm run rv:fair:invariant && npm run rv:single:test && npm run rv:single:invariant && npm run rv:pool:test && npm run rv:pool:invariant && npm run rv:fair-v2:test && npm run rv:fair-v2:invariant && npm run rv:single-v2:test && npm run rv:single-v2:invariant",
     "sim:happy": "node simulations/verify-happy-path.js",
     "sim:deployed": "node simulations/verify-deployed.js",
     "sim:v2": "node simulations/verify-v2.js"

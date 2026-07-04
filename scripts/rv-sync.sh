@@ -6,29 +6,46 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for c in mia-pool-faktory mia-single-faktory mia-fair-faktory; do
+for c in mia-pool-faktory mia-single-faktory mia-fair-faktory \
+         mia-single-faktory-v2 mia-fair-faktory-v2; do
   cat "contracts/$c.clar" "rendezvous/harnesses/$c.tests.clar" \
     > "rendezvous/contracts/$c.clar"
 done
 
-# PATCH 1 (mia-single-faktory): DEPOSITOR -> the simnet deployer WALLET so the
+# PATCH 1 (both singles): DEPOSITOR -> the simnet deployer WALLET so the
 # fuzzer can exercise initialize-pool/top-ups organically. It must stay a
 # standard principal: a contract principal would create a fair<->single
 # dependency cycle in clarinet's deployment ordering. The real contract-to-
 # contract seed path (fair -> single) is covered by the vitest suites.
-sed -i "s/'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22\.mia-fair-faktory/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM/" \
+# NOTE: the v2 sed pins the full `-v2` suffix -- the v1 pattern would leave
+# a dangling `-v2` on the wallet principal.
+sed -i "s/'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22\.mia-fair-faktory'/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'/;s/'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22\.mia-fair-faktory)/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM)/" \
   rendezvous/contracts/mia-single-faktory.clar
+sed -i "s/'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22\.mia-fair-faktory-v2/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM/" \
+  rendezvous/contracts/mia-single-faktory-v2.clar
 
-# PATCH 2 (mia-single-faktory): shorten the ~90-day lock so fuzz runs reach the
+# PATCH 2 (both singles): shorten the ~90-day lock so fuzz runs reach the
 # unlock path organically (each simnet block is one burn block).
 sed -i 's/(define-constant LOCK_PERIOD u12960)/(define-constant LOCK_PERIOD u25)/' \
-  rendezvous/contracts/mia-single-faktory.clar
+  rendezvous/contracts/mia-single-faktory.clar \
+  rendezvous/contracts/mia-single-faktory-v2.clar
 
 # PATCH 3 (mia-pool-faktory): the pool starts opened so single-sided deposits
 # can bootstrap it while fuzzing mia-single-faktory. The open/close gate itself
 # is covered by the vitest unit tests.
 sed -i 's/(define-data-var pool-opened bool false)/(define-data-var pool-opened bool true)/' \
   rendezvous/contracts/mia-pool-faktory.clar
+
+# PATCH 5 (both fairs): initialize copies par from the LIVE ccd013 on mainnet,
+# but the simnet copy of ccd013 deploys UN-initialized (ratio u0, disabled), so
+# the real call chain would leave redemptions-enabled false and every fair
+# property/invariant vacuously discarded (and clarinet/rv resolution of the
+# unlisted ccd013 dependency flip-flops with Hiro rate limits). Freeze par at
+# the mainnet-verified u1710 instead and drop the enabled probe -- the fuzzed
+# contract then behaves exactly like the initialized mainnet deployment.
+sed -i 's/(ratio (contract-call? CCD013 get-redemption-ratio))/(ratio u1710) ;; rv PATCH 5: mainnet-verified par (see rv-sync.sh)/;s/(and (contract-call? CCD013 is-redemption-enabled) (> ratio u0))/(> ratio u0)/' \
+  rendezvous/contracts/mia-fair-faktory.clar \
+  rendezvous/contracts/mia-fair-faktory-v2.clar
 
 # PATCH 4 (requirements cache): the MIA v2 token's mint is auth-gated on
 # mainnet, so the fuzzer's wallets could never obtain MIA. Append an open
@@ -48,4 +65,4 @@ if [ -f "$MIA_CACHE" ] && ! grep -q rv-faucet "$MIA_CACHE"; then
 EOF
 fi
 
-echo "rendezvous/contracts synced (3 contracts, 4 test-only patches)"
+echo "rendezvous/contracts synced (5 contracts, 5 test-only patches)"

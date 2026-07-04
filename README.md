@@ -147,9 +147,13 @@ live offer (`SP1JAG6TV…AJV91`, 457,230 MIA @ 526.96 STX) — the maker must
 - `clarinet check` → ✔ 5 contracts (v1 trio + v2 pair; repo manifest at Clarity 6 / epoch 4.0 for analysis).
 - **68 unit tests** (Clarinet SDK + vitest) green, including a full
   end-to-end run of the auction → seed → deposit → gate → 60/40 unlock story.
-- **Fuzzed with Rendezvous 1.x**: 3 contracts × property + invariant modes,
-  zero failures (see [`rendezvous/README.md`](./rendezvous/README.md)); audit +
-  dispositions in [`AUDIT.md`](./AUDIT.md).
+- **Fuzzed with Rendezvous 1.x**: 5 contracts (v1 trio + v2 pair) × property +
+  invariant modes, 100 runs each, zero failures (see
+  [`rendezvous/README.md`](./rendezvous/README.md)); audit + dispositions in
+  [`AUDIT.md`](./AUDIT.md). The v2 fair harness adds partial-fill properties
+  (exact min(budget, book) spend; frontier record shrinks exactly, maker paid
+  at/above ask) and restates the sorted-book and par-coverage invariants with
+  their exact floor-rounding bounds.
 - **stxer mainnet-fork sims** (self-verifying, exit non-zero on any failure):
   - `npm run sim:happy` — full lifecycle from fresh deploys, **46/46**:
     [run](https://stxer.xyz/simulations/mainnet/931933e40784527147b308eb220f8537)

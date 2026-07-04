@@ -31,5 +31,15 @@ path = "contracts/mia-fair-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 
+[contracts.mia-single-faktory-v2]
+path = "contracts/mia-single-faktory-v2.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mia-fair-faktory-v2]
+path = "contracts/mia-fair-faktory-v2.clar"
+clarity_version = 6
+epoch = "4.0"
+
 [repl.analysis]
 passes = []

@@ -1,4 +1,6 @@
-;; Rendezvous fuzzing harness for mia-single-faktory.
+;; Rendezvous fuzzing harness for mia-single-faktory-v2 (byte-mirror of the v1 harness;
+;; the only v2 source change is the DEPOSITOR constant, which rv-sync patches
+;; to the deployer wallet in both versions anyway).
 ;;
 ;; Deploy-time setup (bottom of the file): simulates the accumulated seed by
 ;; fauceting MIA straight to the contract and anchoring the clock -- the REAL

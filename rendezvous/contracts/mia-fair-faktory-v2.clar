@@ -1,41 +1,5 @@
-;; Title: mia-fair-faktory  (permissionless whitehat settle + spread accumulator)
-;; Summary: STANDALONE fork of ccd014-fair-burn-to-exit-mia. Same below-par
-;;   offer book, but settlement is funded by the CALLER's own STX (not the DAO
-;;   rewards treasury) and the escrowed MIA is ACQUIRED, not burned. The settler
-;;   receives only the par-equivalent of the STX they spent -- i.e. they buy MIA
-;;   at par (1710), ABOVE market, so settling is deliberately unprofitable: a
-;;   pure whitehat anyone may run. The below-par SPREAD is captured HERE and
-;;   accumulates across cycles to seed the single-sided MIA/sBTC pool on fak.fun.
-;;
-;; AMENDMENTS vs reference/ccd014-fair-burn-to-exit-mia.clar (diff side by side):
-;;   1. NOT a DAO extension: no impl-trait, no is-dao-or-extension, no treasury
-;;      revoke-delegate. `owner` var (deployer) only gates initialize + seed.
-;;   2. v2 ONLY: dropped MIA v1 / core-v1-patch / is-v1 everywhere. Offer record
-;;      is {owner, amount(uMIA v2), ustx}.
-;;   3. settle-offers is PERMISSIONLESS and CALLER-FUNDED: pays each filled ask
-;;      in STX from tx-sender directly to the offer owner; no treasury, no burn.
-;;      Escrowed MIA stays in the contract. Rational actors won't call it (you
-;;      overpay at par); only a whitehat does -> "anyone is free, but illogical".
-;;   4. After a settle: par-equiv MIA (spent*1e6/ratio) goes to the settler;
-;;      the SPREAD (acquired - par-equiv) is retained in `surplus-mia` and
-;;      accumulates over 2-3 cycles. A single seed-single-sided call at the end
-;;      pushes it to the single-sided contract, which STARTS the offering then.
-;;   5. redeem-mia (the fixed-rate ccd013 path) is REMOVED -- this contract only
-;;      runs the offer book + arb; the DAO's own redemption is untouched.
-;;   6. Clarity 5: uses `current-contract` (no CONTRACT constant); every MIA the
-;;      contract sends out (refund, par-equiv payout, seed) runs under
-;;      `as-contract?` with an exact post-condition.
-;;   7. PAR SOURCE: the ratio is COPIED from the live DAO redemption
-;;      (SP2PABAF9....ccd013-burn-to-exit-mia, frozen u1710) at initialize --
-;;      NOT recomputed from live supply/treasury like ccd014 does. Recomputing
-;;      today gives ~2025 (redemptions burned ~935M MIA since ccd013's
-;;      snapshot), which would let sellers ask above the DAO's actual 1710
-;;      conversion rate and silently cost the whitehat ~16% on the round trip.
-
-;; CONSTANTS
-
 (define-constant ERR_UNAUTHORIZED (err u13000))
-(define-constant ERR_REFERENCE_NOT_ENABLED (err u13001)) ;; live ccd013 not initialized / zero ratio
+(define-constant ERR_REFERENCE_NOT_ENABLED (err u13001))
 (define-constant ERR_ALREADY_ENABLED (err u13004))
 (define-constant ERR_NOT_ENABLED (err u13005))
 (define-constant ERR_ABOVE_PAR (err u13012))
@@ -43,34 +7,30 @@
 (define-constant ERR_OFFER_NOT_FOUND (err u13014))
 (define-constant ERR_BOOK_FULL (err u13015))
 (define-constant ERR_HAS_OFFER (err u13016))
-(define-constant ERR_INSUFFICIENT_SURPLUS (err u13017)) ;; not enough retained surplus MIA to seed
+(define-constant ERR_INSUFFICIENT_SURPLUS (err u13017))
 
 (define-constant MICRO_CITYCOINS (pow u10 u6))
 (define-constant REDEMPTION_SCALE_FACTOR (pow u10 u6))
-(define-constant MAX_PER_TRANSACTION (* u10000000 MICRO_CITYCOINS)) ;; 10M MIA
+(define-constant MAX_PER_TRANSACTION (* u10000000 MICRO_CITYCOINS))
 (define-constant MAX_OFFERS u50)
 
 (define-constant MIA_TOKEN_V2 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2)
-;; the LIVE DAO redemption (frozen ratio u1710) -- our canonical par reference
 (define-constant CCD013 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia)
-(define-constant SINGLE_SIDED .mia-single-faktory)
+(define-constant SINGLE_SIDED .mia-single-faktory-v2)
 
-;; DATA VARS
-(define-data-var admin principal tx-sender)           ;; admin: gates initialize + seed only
+(define-data-var admin principal tx-sender)
 (define-data-var redemptions-enabled bool false)
-(define-data-var redemption-ratio uint u0)            ;; par copied from live ccd013 (u1710)
-(define-data-var total-settled uint u0)              ;; cumulative uMIA acquired via settle
-(define-data-var total-spent uint u0)                ;; cumulative uSTX settlers paid out
-(define-data-var surplus-mia uint u0)                ;; retained below-par MIA, awaiting seeding
+(define-data-var redemption-ratio uint u0)
+(define-data-var total-settled uint u0)
+(define-data-var total-spent uint u0)
+(define-data-var surplus-mia uint u0)
 
-;; v2-only offer book, sorted ascending by price (ustx/amount)
 (define-data-var offer-book
   (list 50 { owner: principal, amount: uint, ustx: uint })
   (list)
 )
 (define-data-var target-owner principal 'SP000000000000000000002Q6VF78)
 
-;; ADMIN
 
 (define-private (is-admin)
   (is-eq tx-sender (var-get admin))
@@ -83,10 +43,6 @@
   )
 )
 
-;; Copy par from the LIVE ccd013 (its ratio is frozen/immutable after its own
-;; init, so this is the DAO's canonical redemption rate -- NOT recomputed from
-;; live supply, which would drift above 1710 as redemptions burn supply and
-;; break the settler's neutrality vs the real conversion rate). One-shot.
 (define-public (initialize)
   (let (
       (ratio u1710) ;; rv PATCH 5: mainnet-verified par (see rv-sync.sh)
@@ -101,11 +57,7 @@
   )
 )
 
-;; OFFER BOOK (v2 only)
 
-;; Place a standing below-par offer: escrow `amount` v2 uMIA, ask `ask-ustx`.
-;; ask must be > 0 and <= par. One offer per wallet; sorted insert; full book
-;; evicts its worst (priciest) offer for a strictly cheaper newcomer.
 (define-public (place-offer (amount uint) (ask-ustx uint))
   (let (
       (owner tx-sender)
@@ -140,7 +92,6 @@
   )
 )
 
-;; Cancel your own open offer and get the escrowed MIA back.
 (define-public (cancel-offer)
   (let ((owner tx-sender))
     (var-set target-owner owner)
@@ -154,16 +105,8 @@
   )
 )
 
-;; SETTLE (permissionless, caller-funded)
-;;
-;; PERMISSIONLESS: anyone may call. `budget` caps the STX the caller will spend
-;; this call; the book is cheapest-first so it fills the most-pained offers
-;; first. Each fill pays the owner's ask in STX FROM THE CALLER and keeps the
-;; escrowed MIA here. Afterwards the settler receives the par-equivalent MIA
-;; (they buy at par, above market -> settling is unprofitable = whitehat), and
-;; the below-par SPREAD is retained in `surplus-mia` to accumulate across cycles.
 (define-public (settle-offers (budget uint))
-  (let ((settler tx-sender)) ;; capture before as-contract flips tx-sender
+  (let ((settler tx-sender))
     (asserts! (var-get redemptions-enabled) ERR_NOT_ENABLED)
     (let (
       (res (fold settle-step (var-get offer-book) {
@@ -180,12 +123,9 @@
       (surplus (if (> acquired par-equiv) (- acquired par-equiv) u0))
     )
     (var-set offer-book (get kept res))
-    ;; the settler gets the par-equivalent of the STX they spent (bought at par)
     (and (> par-equiv u0)
       (try! (as-contract? ((with-ft MIA_TOKEN_V2 "miamicoin" par-equiv))
              (try! (contract-call? MIA_TOKEN_V2 transfer par-equiv current-contract settler none)))))
-    ;; the below-par SPREAD stays here, accumulating over 2-3 cycles to seed the
-    ;; single-sided MIA/sBTC offering
     (var-set surplus-mia (+ (var-get surplus-mia) surplus))
     (var-set total-settled (+ (var-get total-settled) acquired))
     (var-set total-spent (+ (var-get total-spent) spent))
@@ -198,11 +138,6 @@
   )
 )
 
-;; Push retained spread MIA into the single-sided offering. Repeatable: the
-;; single-sided accumulates MIA and anchors its entry/lock clock on the FIRST
-;; seed. Admin-gated; runs as-contract? so the single-sided sees tx-sender =
-;; this contract (its DEPOSITOR) and pulls `amount` MIA from here (post-condition
-;; bounds exactly that).
 (define-public (seed-single-sided (amount uint))
   (begin
     (asserts! (is-admin) ERR_UNAUTHORIZED)
@@ -215,9 +150,7 @@
   )
 )
 
-;; PRIVATE / READ-ONLY
 
-;; STX value at par for `amount` uMIA v2, using the frozen ratio.
 (define-read-only (get-par-ustx (amount uint))
   (/ (* (var-get redemption-ratio) amount) REDEMPTION_SCALE_FACTOR)
 )
@@ -245,20 +178,27 @@
 )
 
 (define-read-only (get-offer-book) (var-get offer-book))
+
+;; total STX to clear the whole book (and the MIA escrowed behind it); any
+;; smaller budget is consumed exactly thanks to the frontier partial fill
+(define-private (sum-step
+    (r { owner: principal, amount: uint, ustx: uint })
+    (acc { ustx: uint, amount: uint })
+  )
+  { ustx: (+ (get ustx acc) (get ustx r)), amount: (+ (get amount acc) (get amount r)) }
+)
+(define-read-only (get-book-totals)
+  (fold sum-step (var-get offer-book) { ustx: u0, amount: u0 })
+)
 (define-read-only (get-offer (owner principal))
   (get found (fold find-owner-step (var-get offer-book) { target: owner, found: none })))
 (define-read-only (get-offer-count) (len (var-get offer-book)))
 
-;; Refund an escrowed record's v2 MIA to its owner, bounded by an exact
-;; post-condition (matches the ccd014 original's allowance-scoped as-contract?).
 (define-private (refund-rec (r { owner: principal, amount: uint, ustx: uint }))
   (as-contract? ((with-ft MIA_TOKEN_V2 "miamicoin" (get amount r)))
     (try! (contract-call? MIA_TOKEN_V2 transfer (get amount r) current-contract (get owner r) none)))
 )
 
-;; Sorted insert, cheapest-first. STRICT `<` so a same-priced newcomer lands
-;; AFTER existing equal-price offers (first-come-first-serve on ties, per
-;; Friedger): new < entry  <=>  nask * eumia < eask * numia
 (define-private (insert-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
@@ -281,11 +221,14 @@
   )
 )
 
-;; Fill an offer if the remaining budget covers its ask: pay the owner in STX
-;; from the caller, keep the escrowed MIA, accumulate spent/acquired. The
-;; caller's OWN offer is always kept: stx-transfer? to oneself errors, which
-;; the unwrap-panic would turn into a hard abort -- a settler who also has a
-;; resting offer must not crash (they can cancel it instead).
+;; v2: partial fill on the frontier offer. When the remaining budget can't
+;; cover the full ask, consume the whole remainder into the entry pro-rata:
+;; taken floors, so the owner is paid `remaining` for slightly LESS than
+;; pro-rata MIA (never worse than their ask), and the leftover record's
+;; implied price is <= its original price <= par, preserving both the
+;; below-par invariant and the ascending sort. After a partial, remaining
+;; is u0, so no later (pricier) offer can jump the queue with a smaller
+;; absolute ask -- strict price-time priority.
 (define-private (settle-step
     (entry { owner: principal, amount: uint, ustx: uint })
     (acc {
@@ -295,18 +238,44 @@
       kept: (list 50 { owner: principal, amount: uint, ustx: uint }),
     })
   )
-  (if (and
-        (>= (get remaining acc) (get ustx entry))
-        (not (is-eq (get owner entry) tx-sender)))
-    (begin
-      (unwrap-panic (stx-transfer? (get ustx entry) tx-sender (get owner entry)))
-      (merge acc {
-        remaining: (- (get remaining acc) (get ustx entry)),
-        spent: (+ (get spent acc) (get ustx entry)),
-        acquired: (+ (get acquired acc) (get amount entry)),
-      })
+  (let (
+      (remaining (get remaining acc))
+      (ask (get ustx entry))
     )
-    (merge acc { kept: (push-rec (get kept acc) entry) })
+    (if (is-eq (get owner entry) tx-sender)
+      ;; settler's own resting offer: never touch it (self stx-transfer errors)
+      (merge acc { kept: (push-rec (get kept acc) entry) })
+      (if (>= remaining ask)
+        (begin
+          (unwrap-panic (stx-transfer? ask tx-sender (get owner entry)))
+          (merge acc {
+            remaining: (- remaining ask),
+            spent: (+ (get spent acc) ask),
+            acquired: (+ (get acquired acc) (get amount entry)),
+          })
+        )
+        (let ((taken (/ (* (get amount entry) remaining) ask)))
+          ;; taken = u0 covers both remaining = u0 and dust budgets smaller
+          ;; than the price of a single uMIA: keep the entry untouched
+          (if (> taken u0)
+            (begin
+              (unwrap-panic (stx-transfer? remaining tx-sender (get owner entry)))
+              (merge acc {
+                remaining: u0,
+                spent: (+ (get spent acc) remaining),
+                acquired: (+ (get acquired acc) taken),
+                kept: (push-rec (get kept acc)
+                  (merge entry {
+                    amount: (- (get amount entry) taken),
+                    ustx: (- ask remaining),
+                  })),
+              })
+            )
+            (merge acc { kept: (push-rec (get kept acc) entry) })
+          )
+        )
+      )
+    )
   )
 )
 
@@ -321,46 +290,75 @@
     surplus-mia: (var-get surplus-mia),
     offer-count: (len (var-get offer-book)),
   }
-)
-;; Rendezvous fuzzing harness for mia-fair-faktory.
+);; Rendezvous fuzzing harness for mia-fair-faktory-v2 (frontier partial fill).
 ;;
-;; rv concatenates this file onto the contract, so it has FULL access to the
-;; internal vars/maps, and the top-level expressions at the bottom run once at
-;; deploy time (tx-sender = deployer): they faucet MIA to every simnet wallet,
-;; fund the mining treasury, and call `initialize`, freezing par at 1710 (the
-;; verified mainnet ratio).
+;; Mirror of the mia-fair-faktory harness with the v1 invariants restated for
+;; v2's partial-fill semantics, plus two v2-only properties. Two v1 invariants
+;; are no longer EXACTLY true under partial fill -- both drift by floor-
+;; rounding dust, bounded by the number of settle-offers calls:
 ;;
-;;   invariant mode: rv randomly calls the REAL public functions (place-offer,
-;;     cancel-offer, settle-offers, ...) from random wallets and checks every
-;;     `invariant-*` read-only after each step.
-;;   test mode: rv drives the `test-*` properties with fuzzed arguments,
-;;     discarding runs whose `can-test-*` gate returns false.
+;;   - sorted book: a partial fill floors `taken`, so the remainder's implied
+;;     price dips below its original by < 1 uMIA worth. A settler's own
+;;     resting offer (never touched) can sit ahead of the remainder within
+;;     that dust window, making the book pairwise-unsorted by < 1 uMIA per
+;;     partial. Each settle call partial-fills at most one record, so the
+;;     total drift is bounded by the settle-call count.
+;;   - cumulative par coverage: each partial's floor'd `taken` can fall below
+;;     the real-valued par line by < 1 uMIA, so total-settled can trail
+;;     floor(total-spent * 1e6 / ratio) by up to one uMIA per settle call.
+;;
+;; Both invariants below use that exact bound (rv's invariant-mode context
+;; map records per-function call counts), so a REAL bug -- misplaced insert,
+;; over-paying the settler -- still violates them by economically meaningful
+;; margins.
+
+;; ---- rendezvous invariant-mode bookkeeping (Rendezvous book, ch. 6) --------
+;; defined FIRST (the v1 harness keeps it at the bottom): the v2 invariants
+;; read the settle-offers call count as their rounding-dust bound
+
+(define-map context (string-ascii 100) { called: uint })
+
+(define-private (update-context (function-name (string-ascii 100)) (called uint))
+  (ok (map-set context function-name { called: called })))
+
+(define-read-only (rv-settle-calls)
+  (get called (default-to { called: u0 } (map-get? context "settle-offers"))))
 
 ;; ---- invariants ------------------------------------------------------------
 
-;; the book is sorted ascending by price (ustx/amount), checked pairwise via
-;; cross-multiplication (no division, no precision loss)
+;; the book is sorted ascending by price (ustx/amount), pairwise via
+;; cross-multiplication, up to one uMIA of partial-fill rounding drift per
+;; settle-offers call (see header)
 (define-private (rv-sorted-step
     (r { owner: principal, amount: uint, ustx: uint })
-    (acc { prev-ustx: uint, prev-amount: uint, sorted: bool })
+    (acc { prev-ustx: uint, prev-amount: uint, slack: uint, sorted: bool })
   )
-  {
-    prev-ustx: (get ustx r),
-    prev-amount: (get amount r),
-    sorted: (and
-      (get sorted acc)
-      (<= (* (get prev-ustx acc) (get amount r))
-          (* (get ustx r) (get prev-amount acc)))),
-  }
+  (let (
+      (amt-floor (if (> (get amount r) (get slack acc))
+        (- (get amount r) (get slack acc))
+        u0))
+    )
+    {
+      prev-ustx: (get ustx r),
+      prev-amount: (get amount r),
+      slack: (get slack acc),
+      sorted: (and
+        (get sorted acc)
+        (<= (* (get prev-ustx acc) amt-floor)
+            (* (get ustx r) (get prev-amount acc)))),
+    }
+  )
 )
 
 (define-read-only (invariant-book-sorted-by-price)
   (get sorted (fold rv-sorted-step (var-get offer-book)
-    { prev-ustx: u0, prev-amount: u1, sorted: true }))
+    { prev-ustx: u0, prev-amount: u1, slack: (rv-settle-calls), sorted: true }))
 )
 
 ;; every uMIA the contract holds is accounted for: escrowed offers + retained
-;; surplus, nothing more, nothing less
+;; surplus, nothing more, nothing less -- still EXACT under partial fill (a
+;; settle moves `acquired` out of the book, pays out par-equiv, retains the
+;; rest as surplus; the ledger stays balanced to the digit)
 (define-private (rv-sum-amount
     (r { owner: principal, amount: uint, ustx: uint })
     (acc uint)
@@ -378,7 +376,9 @@
     (+ (fold rv-sum-amount (var-get offer-book) u0) (var-get surplus-mia)))
 )
 
-;; no resting ask above par
+;; no resting ask above par -- still EXACT under partial fill (the remainder's
+;; implied price only ever decreases, and floor(par) of the smaller amount
+;; still covers the smaller ask)
 (define-private (rv-par-step
     (r { owner: principal, amount: uint, ustx: uint })
     (all-ok bool)
@@ -390,7 +390,8 @@
   (fold rv-par-step (var-get offer-book) true)
 )
 
-;; one offer per wallet
+;; one offer per wallet -- a partial fill shrinks a record in place, never
+;; duplicates it
 (define-private (rv-unique-step
     (r { owner: principal, amount: uint, ustx: uint })
     (acc { seen: (list 50 principal), dup: bool })
@@ -410,12 +411,12 @@
 )
 
 ;; settlers cumulatively acquired at least the par-equivalent of what they
-;; spent (the spread is never negative)
+;; spent, up to one uMIA of floor rounding per settle-offers call (see header)
 (define-read-only (invariant-settled-covers-spent-at-par)
   (let ((ratio (var-get redemption-ratio)))
     (or
       (is-eq ratio u0)
-      (>= (var-get total-settled)
+      (>= (+ (var-get total-settled) (rv-settle-calls))
           (/ (* (var-get total-spent) REDEMPTION_SCALE_FACTOR) ratio))))
 )
 
@@ -490,7 +491,8 @@
         (unwrap-panic (contract-call? MIA_TOKEN_V2 get-balance tx-sender))
         (+ mia-before (get par-equiv res)))
       (err u922))
-    ;; the spread is non-negative and fully retained
+    ;; the spread is non-negative and fully retained (holds for partial fills
+    ;; too: a floor'd taken from a below-par ask still covers par-equiv)
     (asserts! (>= (get acquired res) (get par-equiv res)) (err u923))
     (asserts! (is-eq (var-get surplus-mia) (+ surplus-before (get surplus res))) (err u924))
     (ok true))
@@ -505,13 +507,71 @@
     (>= (stx-get-balance tx-sender) (mod budget u100000)))
 )
 
+;; v2: a settle consumes EXACTLY min(budget, whole-book cost) -- the frontier
+;; partial fill means no budget is ever left stranded. Requires ratio < 1e6
+;; (1 uMIA costs < 1 uSTX at par) so any 1-uSTX remainder can always buy at
+;; least one uMIA from a below-par ask
+(define-private (test-settle-spends-exactly-min (budget uint))
+  (let (
+      (b (mod budget u100000))
+      (book-cost (get ustx (get-book-totals)))
+      (res (try! (settle-offers b)))
+    )
+    (asserts! (is-eq (get spent res) (if (< b book-cost) b book-cost)) (err u950))
+    (ok true))
+)
+
+(define-read-only (can-test-settle-spends-exactly-min (budget uint))
+  (and
+    (var-get redemptions-enabled)
+    (< (var-get redemption-ratio) u1000000)
+    (is-none (get-offer tx-sender))
+    (>= (stx-get-balance tx-sender) (mod budget u100000)))
+)
+
+;; v2: a budget below the frontier ask partial-fills EXACTLY that offer --
+;; floor'd taken, maker paid at or above their per-uMIA ask, the record
+;; shrinks in place to {amount - taken, ask - budget}, and no later offer
+;; is touched (strict price-time priority)
+(define-private (test-partial-fill-frontier (budget uint))
+  (let (
+      (front (unwrap! (element-at? (var-get offer-book) u0) (err u960)))
+      (b (+ u1 (mod budget (- (get ustx front) u1))))
+      (taken (/ (* (get amount front) b) (get ustx front)))
+      (count-before (get-offer-count))
+      (res (try! (settle-offers b)))
+      (after (unwrap! (get-offer (get owner front)) (err u961)))
+    )
+    (asserts! (is-eq (get spent res) b) (err u962))
+    (asserts! (is-eq (get acquired res) taken) (err u963))
+    (asserts! (is-eq (get amount after) (- (get amount front) taken)) (err u964))
+    (asserts! (is-eq (get ustx after) (- (get ustx front) b)) (err u965))
+    ;; maker paid at/above their ask rate: b/taken >= ask/amount
+    (asserts! (>= (* b (get amount front)) (* taken (get ustx front))) (err u966))
+    ;; the remainder replaced the frontier in place: nothing else consumed
+    (asserts! (is-eq (get-offer-count) count-before) (err u967))
+    (ok true))
+)
+
+(define-read-only (can-test-partial-fill-frontier (budget uint))
+  (match (element-at? (var-get offer-book) u0)
+    front (and
+      (var-get redemptions-enabled)
+      (< (var-get redemption-ratio) u1000000)
+      ;; no resting offer => the frontier is a foreign offer
+      (is-none (get-offer tx-sender))
+      (> (get ustx front) u1)
+      (>= (stx-get-balance tx-sender) (get ustx front)))
+    false)
+)
+
 ;; ---- deploy-time setup (runs last; tx-sender = deployer) --------------------
 
 (define-private (rv-fund-mia (who principal))
   (unwrap-panic (contract-call? MIA_TOKEN_V2 rv-faucet u120000000000 who))
 )
 
-;; 10 wallets x 1.2e11 uMIA = 1.2e12 uMIA total v2 supply
+;; 10 wallets x 1.2e11 uMIA
 (map rv-fund-mia (list
   'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
   'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
@@ -530,10 +590,3 @@
 ;; is-ok (not unwrap-panic): `clarinet check` interprets deploys WITHOUT the
 ;; genesis STX funding the real simnet has, so this must not abort there
 (is-ok (initialize))
-
-;; ---- rendezvous invariant-mode bookkeeping (Rendezvous book, ch. 6) --------
-
-(define-map context (string-ascii 100) { called: uint })
-
-(define-private (update-context (function-name (string-ascii 100)) (called uint))
-  (ok (map-set context function-name { called: called })))
