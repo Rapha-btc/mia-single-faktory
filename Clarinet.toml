@@ -46,6 +46,13 @@ path = "contracts/mia-fair-faktory-v2.clar"
 clarity_version = 6
 epoch = "4.0"
 
+# jing orderbook: mia-fair-v2 minus the par machinery — plain 50-deep MIA v2
+# sell book priced in sBTC, admin-settable min deposit, settler keeps all.
+[contracts.mia-orderbook-jing]
+path = "contracts/mia-orderbook-jing.clar"
+clarity_version = 6
+epoch = "4.0"
+
 # NOTE: contracts/reference/*.clar are unmodified on-chain copies kept ONLY for
 # side-by-side diffing. They call mainnet contracts not in requirements, so they
 # are intentionally excluded from the build.

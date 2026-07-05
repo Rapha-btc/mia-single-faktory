@@ -41,5 +41,10 @@ path = "contracts/mia-fair-faktory-v2.clar"
 clarity_version = 6
 epoch = "4.0"
 
+[contracts.mia-orderbook-jing]
+path = "contracts/mia-orderbook-jing.clar"
+clarity_version = 6
+epoch = "4.0"
+
 [repl.analysis]
 passes = []

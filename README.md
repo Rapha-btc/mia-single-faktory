@@ -180,13 +180,25 @@ live offer (`SP1JAG6TV…AJV91`, 457,230 MIA @ 526.96 STX) — the maker must
     `surplus-mia` to the digit with an empty book), `get-book-totals`
     before/after each settle, and the DEPOSITOR rewiring guard (direct
     `initialize-pool` on single-v2 → u403; only fair-v2 seeds the vault).
+  - `npm run sim:orderbook` — **mia-orderbook-jing** (sBTC sell book, no par)
+    deployed on the fork, **58/58**:
+    [run](https://stxer.xyz/simulations/mainnet/f94dcfc076a6366c35140fed12529f92).
+    Guards (min-deposit, zero/poison ask incl. the MAX_ASK overflow-DoS fix —
+    see AUDIT.md O-1 — duplicate offer, no-offer change, non-admin admin
+    calls), sort through place / reprice change-offer / add change-offer,
+    a marketable-limit taker filling C fully + half of B at B's exact ratio
+    with the 10 bps fee on top, a 5M-sat order STOPPING below an above-limit
+    offer, a 1-sat dust fill (fee floors to 0), self-offer skip, pause (all
+    three mutating entrypoints gated, cancel still refunding while paused),
+    cancel-after-partial, and sat-exact maker/taker/fee-recipient deltas with
+    the escrow == book invariant checked at every stage.
 
 ## Build & test
 ```bash
 clarinet check      # type-check the contracts
 npm install
 npm test            # unit + integration suites (vitest + Clarinet SDK simnet)
-npm run fuzz        # all six rendezvous fuzz targets (or rv:<contract>:<mode>)
+npm run fuzz        # all twelve rendezvous fuzz targets (or rv:<contract>:<mode>, e.g. rv:orderbook:test)
 ```
 
 Testing notes:

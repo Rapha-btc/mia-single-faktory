@@ -1,7 +1,7 @@
 # Rendezvous fuzzing project
 
-An isolated Clarinet project for fuzzing the five contracts (v1 trio + the
-v2 partial-fill pair) with
+An isolated Clarinet project for fuzzing the six contracts (v1 trio, the
+v2 partial-fill pair, and the mia-orderbook-jing sBTC sell book) with
 [Rendezvous (`rv`) 1.x](https://github.com/stx-labs/rendezvous). Run from the
 repo root:
 
@@ -12,7 +12,8 @@ npm run rv:single:invariant     npm run rv:single:test
 npm run rv:pool:invariant       npm run rv:pool:test
 npm run rv:fair-v2:invariant    npm run rv:fair-v2:test
 npm run rv:single-v2:invariant  npm run rv:single-v2:test
-npm run fuzz                  # all ten
+npm run rv:orderbook:invariant  npm run rv:orderbook:test
+npm run fuzz                  # all twelve
 ```
 
 Every script first runs `scripts/rv-sync.sh`, which **generates**

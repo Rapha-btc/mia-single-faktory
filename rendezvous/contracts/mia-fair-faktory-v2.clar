@@ -150,7 +150,6 @@
   )
 )
 
-
 (define-read-only (get-par-ustx (amount uint))
   (/ (* (var-get redemption-ratio) amount) REDEMPTION_SCALE_FACTOR)
 )

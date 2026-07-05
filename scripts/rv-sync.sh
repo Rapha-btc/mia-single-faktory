@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 for c in mia-pool-faktory mia-single-faktory mia-fair-faktory \
-         mia-single-faktory-v2 mia-fair-faktory-v2; do
+         mia-single-faktory-v2 mia-fair-faktory-v2 mia-orderbook-jing; do
   cat "contracts/$c.clar" "rendezvous/harnesses/$c.tests.clar" \
     > "rendezvous/contracts/$c.clar"
 done
@@ -65,4 +65,4 @@ if [ -f "$MIA_CACHE" ] && ! grep -q rv-faucet "$MIA_CACHE"; then
 EOF
 fi
 
-echo "rendezvous/contracts synced (5 contracts, 5 test-only patches)"
+echo "rendezvous/contracts synced (6 contracts, 5 test-only patches)"

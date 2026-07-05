@@ -207,3 +207,88 @@ exactly par-equiv, surplus never negative) remain strict equalities.
   PATCH 5 freezes par at the mainnet-verified u1710 in the fuzz copies.
 - the single deposit property predated the F-3 dust guard; fuzzed LP amounts
   now floor at `MIN_LP_AMOUNT`.
+
+---
+
+## mia-orderbook-jing addendum (sBTC sell book, 2026-07-04)
+
+`mia-orderbook-jing` — fork of `mia-fair-faktory-v2` with the par machinery
+removed: a 50-deep MIA-v2 sell book priced in sBTC. Sellers escrow MIA at any
+ask (`place-offer`), can reprice / top up in one call (`change-offer`), and
+cancel at will; takers cross the book with a marketable limit order
+(`market-order(spend-btc, max-price-per-1m)`) paying a 10 bps fee on top of
+the book spend. No initialize step; admin surface is `set-admin`,
+`set-fee-recipient`, `set-min-deposit`, `set-paused`.
+
+**Verdict: PASS** after the O-1 fix. Verified on the FINAL source by:
+- stxer mainnet-fork sim **58/58** (`npm run sim:orderbook`) —
+  https://stxer.xyz/simulations/mainnet/f94dcfc076a6366c35140fed12529f92
+  (guards incl. poison-ask + pause, sort through place/reprice/add, crossing
+  fills with frontier partial at the maker's exact ratio, limit-stop with
+  budget headroom, 1-sat dust fill with fee floored to 0, self-offer skip,
+  cancel-after-partial, sat-exact maker/taker/fee deltas, escrow == book at
+  every stage and 0 when empty)
+- Rendezvous property mode, 300 runs, and invariant mode, 200 runs
+  (`npm run rv:orderbook:test` / `rv:orderbook:invariant`) — **zero
+  failures**, including sequences where the fuzzer pauses/unpauses mid-run
+
+### O-1 (CRITICAL) — unbounded ask = permanent book freeze via overflow — **FIXED**
+Removing the par ceiling removed the only arithmetic bound on `ask-btc`. The
+folds cross-multiply (`ask * ONE_MILLION_MIA` in the limit check,
+`ask * amount` in insert/bump), and Clarity uint overflow ABORTS the tx. One
+offer with `ask > ~3.4e26` (min-deposit escrow, refundable) therefore bricked
+every future `market-order`, `place-offer` and `change-offer` — and could not
+be bumped out, because the bump comparison itself multiplies against the
+poison ask. Activity freeze only: `cancel-offer` does no multiplication, so
+every maker could always exit with a full refund. v2 is NOT exposed (par cap
++ `MAX_PER_TRANSACTION` bound both factors; no `* 1e12` term exists there).
+
+Fix: `MAX_ASK u1000000000000000` (1e15 sats = 10M BTC) enforced on `ask-btc`
+(place), `new-ask-btc` (change) and `max-price-per-1m` (market-order — that
+one is self-DoS only, but a clean `ERR_INVALID_OFFER` beats a runtime abort).
+Worst product is now ~1e30 against the ~3.4e38 overflow line. Note the cap is
+deliberately unit-incongruent (total sats vs sats-per-1M): it is an overflow
+bound, not an economic policy. Pinned by two sim steps (poison ask and poison
+limit both -> `err u13013`).
+
+### O-2 (LOW) — frontier partial can exceed the taker's limit by flooring
+The partial fill floors `taken`, so the taker's effective price
+(`remaining / taken`) can exceed `max-price-per-1m` by less than one uMIA's
+worth per market-order call (the fuzz property asserts exactly that bound:
+`spent * 1e12 <= max * acquired + max`). At min-deposit sizes (>= 100k MIA)
+this is sub-satoshi. **Disposition: accept (inherent to integer pro-rata;
+mirror of v2's F-11, maker-favorable).**
+
+### O-3 (INFO) — pause switch — **ADDED by team decision**
+Original fork had no emergency lever. `set-paused` (admin) now gates
+`place-offer` / `change-offer` / `market-order` with `ERR_PAUSED u13020`;
+`cancel-offer` is deliberately NOT pausable, so makers can always exit with
+their escrow and the admin cannot freeze user funds. Sim-verified (all three
+gated calls revert while paused; cancel refunds while paused).
+
+### O-4 (INFO) — accepted as-is
+- `unwrap-panic` on the sBTC transfers inside the settle fold: a taker with
+  insufficient sBTC gets a runtime abort instead of a clean error. Atomic
+  (full revert, no partial state); FE post-conditions (`spend + fee` sBTC
+  out) make it a non-event. Same pattern as v2's `stx-transfer?`.
+- `market-order` prints aggregate `spent/acquired/fee` only; per-maker fill
+  attribution comes from the sBTC transfer events in the same tx.
+- `change-offer` re-inserts at the new price with fresh time priority (a
+  reprice queues behind equal-priced offers, like a new placement).
+- `min-deposit` gates placement and amend totals only; a remainder ground
+  below it by fills stays fillable/cancellable but cannot be repriced
+  without topping up (anti-spam for the 50 slots).
+- fee is a constant (`FEE_BPS u10`): takers cannot be rugged by a fee hike;
+  changing it requires a new contract.
+
+### Checked and sound (no action)
+Escrow solvency on every path (contract MIA == book sum, fuzz-verified as a
+strict equality — no surplus term in this contract); no double-refund; the
+`change-offer` + bump-out + `target-owner` interplay; sort preservation
+through partial fills (residual implied price only ever decreases); no
+zombie entries (both sides of every record stay > 0; fuzz invariant); maker
+never paid below their per-uMIA ask; one offer per owner; 10 bps fee math
+(floor; zero-fee dust fills settle rather than revert); zero-fill
+market-orders revert (`ERR_NO_FILL u13019`) so takers never pay gas-for-
+nothing silently; admin cannot touch escrow or resting offers; no
+reentrancy surface (SIP-010 has no callbacks).
