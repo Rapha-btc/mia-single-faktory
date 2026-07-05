@@ -18,11 +18,17 @@
 (define-constant ERR_HAS_OFFER (err u13016))
 (define-constant ERR_BELOW_MIN_DEPOSIT (err u13018))
 (define-constant ERR_NO_FILL (err u13019))
+(define-constant ERR_PAUSED (err u13020))
 
 (define-constant MICRO_CITYCOINS (pow u10 u6))
 ;; price unit for the settle limit: sats per 1M MIA (1M MIA = 1e12 uMIA)
 (define-constant ONE_MILLION_MIA (* u1000000 MICRO_CITYCOINS))
 (define-constant MAX_OFFERS u50)
+;; ask/limit ceiling: 1e15 sats (10M BTC) -- far above any real price, but
+;; keeps every cross-multiplication (ask * 1e12, ask * amount, max * amount)
+;; well under 2^128. Without it one poison offer with an astronomical ask
+;; overflows the folds and permanently bricks the whole book (audit CRIT-1).
+(define-constant MAX_ASK u1000000000000000)
 ;; taker fee: 10 bps of the book spend, paid in sBTC on top of it
 (define-constant FEE_BPS u10)
 (define-constant BPS_DENOM u10000)
@@ -31,6 +37,9 @@
 (define-constant SBTC_TOKEN 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token)
 
 (define-data-var admin principal tx-sender)
+;; pause gates place-offer / change-offer / market-order. cancel-offer is
+;; NEVER pausable: makers can always exit with their escrow.
+(define-data-var paused bool false)
 (define-data-var fee-recipient principal 'SM362G0X1YNB2M3FWWFAASV9WB3XHQ8RWP512SSX3)
 (define-data-var min-deposit uint (* u100000 MICRO_CITYCOINS))
 
@@ -59,6 +68,14 @@
   )
 )
 
+(define-public (set-paused (pause bool))
+  (begin
+    (asserts! (is-admin) ERR_UNAUTHORIZED)
+    (var-set paused pause)
+    (ok (print { notification: "set-paused", payload: { paused: pause } }))
+  )
+)
+
 (define-public (set-min-deposit (amount uint))
   (begin
     (asserts! (is-admin) ERR_UNAUTHORIZED)
@@ -75,8 +92,9 @@
       (nrec { owner: owner, amount: amount, btc: ask-btc })
       (book (var-get offer-book))
     )
+    (asserts! (not (var-get paused)) ERR_PAUSED)
     (asserts! (>= amount (var-get min-deposit)) ERR_BELOW_MIN_DEPOSIT)
-    (asserts! (> ask-btc u0) ERR_INVALID_OFFER)
+    (asserts! (and (> ask-btc u0) (<= ask-btc MAX_ASK)) ERR_INVALID_OFFER)
     (var-set target-owner owner)
     (asserts! (is-eq (len (filter is-target-owner book)) u0) ERR_HAS_OFFER)
     (try! (contract-call? MIA_TOKEN_V2 transfer amount owner current-contract none))
@@ -102,7 +120,7 @@
   )
 )
 
-;; amend-offer: reprice a resting offer and optionally escrow more MIA in one
+;; change-offer: reprice a resting offer and optionally escrow more MIA in one
 ;; call (add-amount none = reprice only). new-ask-btc is the TOTAL ask for
 ;; the (existing + added) amount. The offer is re-inserted at its new price
 ;; position, so an amend queues like a fresh insert at that price.
@@ -112,7 +130,8 @@
       (adding (default-to u0 add-amount))
       (book (var-get offer-book))
     )
-    (asserts! (> new-ask-btc u0) ERR_INVALID_OFFER)
+    (asserts! (not (var-get paused)) ERR_PAUSED)
+    (asserts! (and (> new-ask-btc u0) (<= new-ask-btc MAX_ASK)) ERR_INVALID_OFFER)
     (var-set target-owner owner)
     (let (
         (mine (filter is-target-owner book))
@@ -128,7 +147,7 @@
         (var-set offer-book
           (if (get placed res) (get out res) (push-rec (get out res) nrec)))
       )
-      (print { notification: "amend-offer", payload: nrec })
+      (print { notification: "change-offer", payload: nrec })
       (ok true)
     )
   )
@@ -152,6 +171,10 @@
 ;; book is sorted ascending, so the first offer above the limit ends fills.
 (define-public (market-order (spend-btc uint) (max-price-per-1m uint))
   (let ((settler tx-sender))
+    (asserts! (not (var-get paused)) ERR_PAUSED)
+    ;; cap the limit too so (* max-price amount) can't overflow (self-DoS only,
+    ;; but a clean error beats a runtime abort)
+    (asserts! (<= max-price-per-1m MAX_ASK) ERR_INVALID_OFFER)
     (let (
       (res (fold settle-step (var-get offer-book) {
         remaining: spend-btc,
@@ -313,6 +336,7 @@
 (define-read-only (get-info)
   {
     admin: (var-get admin),
+    paused: (var-get paused),
     min-deposit: (var-get min-deposit),
     fee-bps: FEE_BPS,
     fee-recipient: (var-get fee-recipient),
