@@ -185,6 +185,46 @@ filling).
   the 2,900-STX partial redemption with the residual MIA left escrowed, and a final `get-status` reconciling every
   running total to the digit.
 
+## stx-to-stx-mia-faktory — "STX to STX" (pending deploy)
+
+Friedger's inversion of the route: the whitehat capital is **STX** (which
+fastpool has) instead of MIA. Same one-function machine, legs mirrored —
+`settle-and-redeem(amount-ustx)`: `amount > 0` = the hardcoded FASTPOOL
+beneficiary parks STX; `amount = 0` = anyone re-triggers. Order per
+friedger: **first fill the book** (machine keeps the par-equiv MIA), **then
+claim STX** (burn it through ccd013 at the same par). When the treasury is
+funded, one tx does the whole STX → MIA → STX loop atomically; when it
+isn't, the MIA waits. Par-in/par-out means the capital only cycles —
+stxer-proven round trip: 4 loops, 11,741.860000 STX spent, 11,741.859996
+back (4 uSTX dust), 6.87M MIA burned. Only ever services what the fair
+book holds, so tell makers to fill fair toward the 10M-MIA par equivalent
+(17,100 STX) per cycle.
+
+- `npm run sim:stx-route` — **60/60** vs LIVE fair-v2 + LIVE ccd013:
+  [run](https://stxer.xyz/simulations/mainnet/35790aef5aa3f5db776d6ec236312587).
+  Live-book sweep with held MIA (treasury empty), redeem-on-payout with
+  exact 1-uSTX dust, the **fully atomic one-tx loop**, BOOK > escrow
+  frontier partial with same-tx escrow refill, machine-loops, R-1 dust
+  regression, hatch guards, and to-the-digit final accounting.
+- `npm run rv:stx-route:test` / `rv:stx-route:invariant` — 6 properties +
+  3 invariants (acquired covers spend at par, received covers burns at
+  par, round-trip parity), zero failures.
+- Independent audit: **PASS, no CRIT/HIGH/MED** (S-1…S-9 in
+  [`AUDIT.md`](./AUDIT.md); R-1/R-2 fixes inherited from the sibling).
+  The two findings worth knowing operationally:
+  - **S-1 LOW (accepted)** — under settle-first, a permissionless trigger
+    while the ccd013 treasury is empty converts the machine's parked STX
+    into MIA, which then waits for the next cycle. Value-preserving (par
+    redemption + `withdraw-mia`), but the *standing asset while waiting
+    can be MIA rather than STX* — a liquidity/timing cost, not principal.
+  - **S-2 INFO** — front-running a deposit extracts nothing: fair-v2
+    rejects asks above par and fills cheapest-first, so an attacker's
+    best move (an exactly-par offer) sorts LAST behind every honest
+    cheaper seller and, if filled, is paid exactly par — the same rate
+    ccd013 pays directly. The "attack" is just using the exit service at
+    the listed price; the machine's worst case is 1 uSTX of floor dust
+    per fill.
+
 ## Verification
 
 - `clarinet check` → ✔ 5 contracts (v1 trio + v2 pair; repo manifest at Clarity 6 / epoch 4.0 for analysis).

@@ -349,3 +349,41 @@ route (one public trigger + two owner hatches). Findings numbered R-*.
   ccd013 copy behave like the initialized mainnet deployment and pays
   redemptions from its own balance; PATCH 7 points FASTPOOL at the simnet
   deployer wallet).
+
+### stx-to-stx-mia-faktory addendum (mirror, 2026-07-05)
+
+Friedger's inversion: the working capital is STX; the legs run settle →
+redeem ("first fill the book, then claim STX"). Inherits the audited
+core (hardcoded FASTPOOL per R-2, pre-quoted redeem leg per R-1, same
+allowance/hatch/no-op patterns). Independent adversarial pass focused on
+what the inversion changes — **verdict PASS, no CRIT/HIGH/MED**:
+
+- **S-1 LOW (accepted)** — settle-first means any permissionless trigger
+  while the treasury is empty converts the machine's parked STX into MIA
+  (fillable at up to a par-priced offer). Value-preserving: the MIA is
+  redeemable at the same par when the treasury refills, and
+  `withdraw-mia` recovers it any time; the cost is liquidity/timing,
+  bounded to ≤1 uSTX floor dust per fill. Inherent to the chosen
+  ordering — while waiting, the standing asset can be MIA, not STX.
+- **S-2 INFO** — deposit sandwich/MEV bounded: a par-priced front-run
+  offer sorts LAST (par is the ask ceiling), cannot jump honest sellers,
+  and is merely serviced at par — exactly what ccd013 would pay it
+  directly. No above-par extraction path exists.
+- **S-3 INFO** — the machine may hold >10M MIA across triggers; the
+  redeem leg drains it correctly at 10M/trigger, allowances stay
+  cap-or-exact, residual untouchable by third parties.
+- **S-4…S-9 clean** — inter-leg state (fresh balance reads, redeem
+  output parked for the next trigger, never stranded/double-spent);
+  `spent==0 ⟺ par-equiv==0` so the skip branch can't uncount a real
+  settle; every `as-contract?` allowance cap-or-exact; accounting vars
+  gate nothing; the plain STX deposit has no self-transfer/zero-amount
+  edge; the machine can never own a fair-v2 book offer, so its held MIA
+  is unreachable from the book side.
+
+Verification: stxer `npm run sim:stx-route` — **60/60** vs LIVE fair-v2
++ LIVE ccd013 (fully-atomic one-tx loop, BOOK>escrow frontier partial
+with same-tx refill, R-1 dust regression, exact final accounting; round
+trip over 4 loops lost 4 uSTX total). Rendezvous
+`rv:stx-route:test|invariant` — 6 properties + 3 invariants (acquired
+covers spend at par, received covers burns at par, round-trip parity),
+zero failures.

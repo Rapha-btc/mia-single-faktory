@@ -54,6 +54,13 @@ path = "contracts/mia-to-mia-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 
+# the STX-capital mirror of mia-to-mia ("first fill the book, then claim
+# STX"): settle leg keeps the par-equiv MIA, redeem leg burns it back to STX.
+[contracts.stx-to-stx-mia-faktory]
+path = "contracts/stx-to-stx-mia-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
 # jing orderbook: mia-fair-v2 minus the par machinery — plain 50-deep MIA v2
 # sell book priced in sBTC, admin-settable min deposit, settler keeps all.
 [contracts.mia-orderbook-jing]

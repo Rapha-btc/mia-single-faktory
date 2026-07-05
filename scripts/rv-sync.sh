@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 for c in mia-pool-faktory mia-single-faktory mia-fair-faktory \
          mia-single-faktory-v2 mia-fair-faktory-v2 mia-orderbook-jing \
-         mia-to-mia-faktory; do
+         mia-to-mia-faktory stx-to-stx-mia-faktory; do
   cat "contracts/$c.clar" "rendezvous/harnesses/$c.tests.clar" \
     > "rendezvous/contracts/$c.clar"
 done
@@ -93,10 +93,11 @@ if [ -f "$CCD013_CACHE" ] && ! grep -q rv-ccd013-patch "$CCD013_CACHE"; then
 EOF2
 fi
 
-# PATCH 7 (mia-to-mia-faktory): FASTPOOL (fastpool.btc on mainnet) -> the
-# simnet deployer wallet so the fuzzer can reach the deposit leg and the
+# PATCH 7 (both route machines): FASTPOOL (fastpool.btc on mainnet) -> the
+# simnet deployer wallet so the fuzzer can reach the deposit legs and the
 # beneficiary-exactness properties are checkable.
 sed -i "s/'SP3KJBWTS3K562BF5NXWG5JC8W90HEG7WPYH5B97X/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM/" \
-  rendezvous/contracts/mia-to-mia-faktory.clar
+  rendezvous/contracts/mia-to-mia-faktory.clar \
+  rendezvous/contracts/stx-to-stx-mia-faktory.clar
 
-echo "rendezvous/contracts synced (7 contracts, 7 test-only patches)"
+echo "rendezvous/contracts synced (8 contracts, 7 test-only patches)"

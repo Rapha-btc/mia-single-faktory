@@ -52,5 +52,10 @@ path = "contracts/mia-to-mia-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 
+[contracts.stx-to-stx-mia-faktory]
+path = "contracts/stx-to-stx-mia-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
 [repl.analysis]
 passes = []
