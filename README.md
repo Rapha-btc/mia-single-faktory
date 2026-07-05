@@ -142,6 +142,49 @@ live offer (`SP1JAG6TV…AJV91`, 457,230 MIA @ 526.96 STX) — the maker must
 `cancel-offer` on v1 and re-place on v2, or a whitehat settles it on v1
 (v1's spread can only seed v1's single, not v2's).
 
+## mia-to-mia-faktory — "Miami to Miami" (pending deploy)
+
+**One function**: `redeem-and-settle(amount-umia)`. `amount > 0` — the
+**hardcoded beneficiary** (`FASTPOOL` = fastpool.btc, per AUDIT R-2 a
+first-depositor slot would be front-runnable) feeds MIA v2 into the
+machine; `amount = 0` — **anyone** re-triggers it. Then
+whatever is currently possible happens:
+
+- **redeem leg** — if the ccd013 treasury has STX and the machine holds
+  MIA, it redeems at par (u1710) in ≤10M-MIA chunks (the ccd013 per-tx
+  cap); the STX escrows **in the machine**;
+- **settle leg** — if the machine holds STX and the fair book has offers,
+  it settles; the par-equiv MIA goes straight to the **depositor**, never
+  the caller.
+
+A bare re-trigger with nothing to do reverts `u9002`, so bots don't pay
+for no-ops. Built for the reality that the ccd013 rewards treasury
+(`ccd002-treasury-mia-rewards-v3`) is **empty between PoX cycles**
+(verified u0 on 2026-07-05) and refills in ~16.7k-STX bursts (~9.8M MIA at
+par), while the fair book refills as the community sells above the Alex
+price (≤ par) — the surplus STX sits in the machine as a standing par bid
+until both sides show up. Escrowed STX can only exit through the
+par-capped book, so the MIA always comes back at ≥ the u1710 it was minted
+at. ccd013 partial fills (treasury smaller than the request) leave the
+unburned MIA escrowed for the next trigger; the redeem leg pre-quotes via
+`get-redemption-for-balance` and skips zero-value redemptions, so dust
+donations can't brick the trigger (AUDIT R-1). **MIA v2 only.**
+Owner-only `withdraw-stx`/`withdraw-mia` emergency hatches cover the two
+stranding modes (pox-5 ends the treasury refills / the book stops
+filling).
+
+- `npm run sim:route` — deployed on the fork against **LIVE ccd013 + LIVE
+  fair-v2** (real 3-offer book, 1,741.86 STX / 1.363M MIA), **48/48**:
+  [run](https://stxer.xyz/simulations/mainnet/4eb4a77f26c6f72fb8848fec213ecc16).
+  Covers the empty-treasury deposit (both legs skip, nothing reverts), the
+  cycle-payout re-trigger (10M MIA → exactly 17,100 STX **and** the
+  live-book sweep in one stranger tx — also the runtime proof that
+  `with-ft` allowances cover ccd013's ft *burn* under `as-contract?`), the
+  settle-only re-trigger with exact economics, caller-earns-nothing, the
+  beneficiary-slot guard, both hatch guards + exact owner withdrawals,
+  the 2,900-STX partial redemption with the residual MIA left escrowed, and a final `get-status` reconciling every
+  running total to the digit.
+
 ## Verification
 
 - `clarinet check` → ✔ 5 contracts (v1 trio + v2 pair; repo manifest at Clarity 6 / epoch 4.0 for analysis).

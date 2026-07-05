@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 for c in mia-pool-faktory mia-single-faktory mia-fair-faktory \
-         mia-single-faktory-v2 mia-fair-faktory-v2 mia-orderbook-jing; do
+         mia-single-faktory-v2 mia-fair-faktory-v2 mia-orderbook-jing \
+         mia-to-mia-faktory; do
   cat "contracts/$c.clar" "rendezvous/harnesses/$c.tests.clar" \
     > "rendezvous/contracts/$c.clar"
 done
@@ -65,4 +66,37 @@ if [ -f "$MIA_CACHE" ] && ! grep -q rv-faucet "$MIA_CACHE"; then
 EOF
 fi
 
-echo "rendezvous/contracts synced (6 contracts, 5 test-only patches)"
+# PATCH 6 (requirements cache, ccd013): on mainnet ccd013 is initialized
+# (par u1710) and pays redemptions out of the DAO rewards treasury, which
+# refills only with real PoX cycles. The cached simnet copy deploys
+# UN-initialized and its treasury calls fail DAO auth. Make the copy behave
+# like the live one: (a) self-initialize at deploy (frozen mainnet par);
+# (b) treat the ccd013 contract's OWN STX balance as the treasury (the
+# mia-to-mia harness exposes rv-fund-treasury so fuzzer wallets stand in
+# for cycle payouts); (c) pay redemptions from that balance directly.
+CCD013_CACHE=rendezvous/.cache/requirements/SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia.clar
+if [ ! -f "$CCD013_CACHE" ]; then
+  (cd rendezvous && clarinet check >/dev/null 2>&1 || true)
+fi
+if [ -f "$CCD013_CACHE" ] && ! grep -q rv-ccd013-patch "$CCD013_CACHE"; then
+  # (b) current balance = ccd013's own balance
+  sed -i "s|(stx-get-balance 'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH.ccd002-treasury-mia-rewards-v3)|(stx-get-balance 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia)|" "$CCD013_CACHE"
+  # (c) pay from own balance instead of the DAO-gated treasury withdraw
+  perl -0pi -e "s/\(try! \(contract-call\?\s*'SP8A9HZ3PKST0S42VM9523Z9NV42SZ026V4K39WH\.ccd002-treasury-mia-rewards-v3\s*withdraw-stx redemption-amount-ustx user-address\s*\)\)/(try! (as-contract? ((with-stx redemption-amount-ustx)) (try! (stx-transfer? redemption-amount-ustx tx-sender user-address))))/s" "$CCD013_CACHE"
+  # (a) self-initialize at deploy with the mainnet-verified frozen par
+  cat >> "$CCD013_CACHE" <<'EOF2'
+
+;; rv-ccd013-patch: TEST-ONLY, appended by scripts/rv-sync.sh for the
+;; fuzzing simnet. Mirrors the initialized mainnet state (par u1710).
+(var-set redemption-ratio u1710)
+(var-set redemptions-enabled true)
+EOF2
+fi
+
+# PATCH 7 (mia-to-mia-faktory): FASTPOOL (fastpool.btc on mainnet) -> the
+# simnet deployer wallet so the fuzzer can reach the deposit leg and the
+# beneficiary-exactness properties are checkable.
+sed -i "s/'SP3KJBWTS3K562BF5NXWG5JC8W90HEG7WPYH5B97X/'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM/" \
+  rendezvous/contracts/mia-to-mia-faktory.clar
+
+echo "rendezvous/contracts synced (7 contracts, 7 test-only patches)"

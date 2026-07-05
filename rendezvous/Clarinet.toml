@@ -9,6 +9,7 @@ telemetry = false
 cache_dir = "./.cache"
 
 requirements = [
+    { contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.ccd013-burn-to-exit-mia' },
     { contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' },
     { contract_id = 'SP1H1733V5MZ3SZ9XRW9FKYGEZT0JDGEB8Y634C7R.miamicoin-token-v2' },
     { contract_id = 'SP466FNC0P7JWTNM2R9T199QRZN1MYEDTAR0KP27.miamicoin-token' },
@@ -43,6 +44,11 @@ epoch = "4.0"
 
 [contracts.mia-orderbook-jing]
 path = "contracts/mia-orderbook-jing.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mia-to-mia-faktory]
+path = "contracts/mia-to-mia-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 

@@ -46,6 +46,14 @@ path = "contracts/mia-fair-faktory-v2.clar"
 clarity_version = 6
 epoch = "4.0"
 
+# wrapper for whitehat settlers ("Miami to Miami"): one tx = ccd013
+# redeem-mia (MIA -> STX at par) + fair-v2 settle-offers (STX -> par-equiv
+# MIA); holds no funds, redeems only what the live book needs.
+[contracts.mia-to-mia-faktory]
+path = "contracts/mia-to-mia-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
 # jing orderbook: mia-fair-v2 minus the par machinery — plain 50-deep MIA v2
 # sell book priced in sBTC, admin-settable min deposit, settler keeps all.
 [contracts.mia-orderbook-jing]

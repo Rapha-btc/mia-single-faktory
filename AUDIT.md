@@ -292,3 +292,60 @@ never paid below their per-uMIA ask; one offer per owner; 10 bps fee math
 market-orders revert (`ERR_NO_FILL u13019`) so takers never pay gas-for-
 nothing silently; admin cannot touch escrow or resting offers; no
 reentrancy surface (SIP-010 has no callbacks).
+
+## mia-to-mia-faktory addendum ("Miami to Miami", 2026-07-05)
+
+Independent adversarial review of the escrowed ccd013→fair-v2 whitehat
+route (one public trigger + two owner hatches). Findings numbered R-*.
+
+### Fixed in this pass
+
+- **R-2 CRIT — front-runnable beneficiary slot.** The original design let
+  the FIRST depositor claim the beneficiary slot (and with it the MIA
+  output stream AND both emergency hatches). Deploy and first deposit
+  cannot be atomic on Stacks, so a griefer front-running fastpool's first
+  deposit would own the machine. **Fix: the beneficiary is the hardcoded
+  `FASTPOOL` constant (fastpool.btc = `SP3KJBWTS3K562BF5NXWG5JC8W90HEG7WPYH5B97X`);
+  the slot, its data-var and all owner-none paths were removed.** ⚠ The
+  address must be confirmed with friedger before deploy.
+- **R-1 HIGH — dust-donation brick.** `try-redeem` called
+  `ccd013.redeem-mia` whenever the machine held any MIA and the treasury
+  any STX. A donation below ~585 uMIA (value floors to zero at par 1710)
+  made ccd013 abort (`u13007`/`u13008`), and because both legs run in one
+  transaction the settle leg died with it — a sub-cent griefing loop only
+  the owner could clear. **Fix: `try-redeem` pre-quotes via ccd013's own
+  `get-redemption-for-balance` and skips (ok none) unless the redemption
+  pays out — one check that also covers the empty-machine and
+  empty-treasury cases.** Regression-pinned in the stxer sim (dust +
+  funded treasury → clean `u9002`) and fuzzed
+  (`test-dust-donation-never-bricks`).
+
+### Accepted / verified-clean (R-3…R-10)
+
+- R-3 INFO: `spent>0 ∧ par-equiv=0` STX-stranding is impossible while
+  `redemption-ratio < 1e6` (live: immutable u1710; min nonzero spend of
+  1 uSTX yields par-equiv 584). Invariant documented, not guarded.
+- R-4 INFO: STX/MIA donations ≥ 585 uMIA only ever benefit the
+  beneficiary. Accepted.
+- R-5 clean: the machine can never hold a resting fair-v2 offer, so the
+  settle-step self-skip path is unreachable for it.
+- R-6 clean: the settle budget reads `stx-get-balance` AFTER the redeem
+  leg — freshly redeemed STX is spendable in the same trigger.
+- R-7 clean: every `as-contract?` allowance is cap-or-exact (redeem caps
+  at the request while ccd013 may burn less; settle caps at budget;
+  forward/withdraw are exact).
+- R-8 clean: prints and `get-status` reflect true post-op state.
+- R-9 INFO (by design): the beneficiary receives exactly par-equiv; the
+  below-par spread stays in fair-v2's `surplus-mia` for the vault.
+- R-10 clean: `.mia-fair-faktory-v2` dot-reference requires deploying
+  under SPV9K21 (fair-v2 already live there). Clarity 5.
+
+### Verification
+
+- stxer mainnet-fork `npm run sim:route` — **72/72** vs LIVE ccd013 +
+  LIVE fair-v2, incl. both audit-fix regressions.
+- Rendezvous `npm run rv:route:test` / `rv:route:invariant` — 6
+  properties + 4 invariants, zero failures (PATCH 6 makes the cached
+  ccd013 copy behave like the initialized mainnet deployment and pays
+  redemptions from its own balance; PATCH 7 points FASTPOOL at the simnet
+  deployer wallet).
