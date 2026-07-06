@@ -57,5 +57,26 @@ path = "contracts/stx-to-stx-mia-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 
+# mock venues for mia-arb-faktory (see rv-sync.sh PATCH 8)
+[contracts.mock-alex]
+path = "contracts/mock-alex.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mock-xyk]
+path = "contracts/mock-xyk.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mock-velar]
+path = "contracts/mock-velar.clar"
+clarity_version = 6
+epoch = "4.0"
+
+[contracts.mia-arb-faktory]
+path = "contracts/mia-arb-faktory.clar"
+clarity_version = 6
+epoch = "4.0"
+
 [repl.analysis]
 passes = []

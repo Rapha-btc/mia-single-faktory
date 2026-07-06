@@ -8,10 +8,14 @@ cd "$(dirname "$0")/.."
 
 for c in mia-pool-faktory mia-single-faktory mia-fair-faktory \
          mia-single-faktory-v2 mia-fair-faktory-v2 mia-orderbook-jing \
-         mia-to-mia-faktory stx-to-stx-mia-faktory; do
+         mia-to-mia-faktory stx-to-stx-mia-faktory mia-arb-faktory; do
   cat "contracts/$c.clar" "rendezvous/harnesses/$c.tests.clar" \
     > "rendezvous/contracts/$c.clar"
 done
+
+# mock venues for the arb (real-balance xyk stand-ins for ALEX/Bitflow/Velar,
+# which have no state in simnet) -- copied verbatim, no harness
+cp rendezvous/mocks/*.clar rendezvous/contracts/
 
 # PATCH 1 (both singles): DEPOSITOR -> the simnet deployer WALLET so the
 # fuzzer can exercise initialize-pool/top-ups organically. It must stay a
@@ -100,4 +104,15 @@ sed -i "s/'SP3KJBWTS3K562BF5NXWG5JC8W90HEG7WPYH5B97X/'ST1PQHQKV0RJXZFY1DGX8MNSNY
   rendezvous/contracts/mia-to-mia-faktory.clar \
   rendezvous/contracts/stx-to-stx-mia-faktory.clar
 
-echo "rendezvous/contracts synced (8 contracts, 7 test-only patches)"
+# PATCH 8 (mia-arb-faktory): the four venue principals -> the LOCAL book and
+# the mock venues. The full loop against live liquidity is covered by
+# simulations/verify-arb.js on a mainnet fork; here we fuzz the arb's own
+# escrow/refund/profit promises against faithful fixed-8 xyk stand-ins.
+sed -i \
+  -e "s/'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22\.mia-orderbook-faktory/.mia-orderbook-jing/" \
+  -e "s/'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM\.amm-pool-v2-01/.mock-alex/" \
+  -e "s/'SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR\.xyk-core-v-1-2/.mock-xyk/" \
+  -e "s/'SP20X3DC5R091J8B6YPQT638J8NR1W83KN6TN5BJY\.univ2-pool-v1_0_0-0070/.mock-velar/" \
+  rendezvous/contracts/mia-arb-faktory.clar
+
+echo "rendezvous/contracts synced (9 contracts + 3 mocks, 8 test-only patches)"

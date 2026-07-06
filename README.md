@@ -225,6 +225,54 @@ book holds, so tell makers to fill fair toward the 10M-MIA par equivalent
     the listed price; the machine's worst case is 1 uSTX of floor dust
     per fill.
 
+## mia-arb-faktory — atomic triangular arb (pending deploy)
+
+Permissionless keeper contract around the DEPLOYED
+`SPV9K21….mia-orderbook-faktory`. Two loops, both atomic, both
+profit-or-revert — the caller fronts every sat and receives every sat back
+in the same tx; the contract never holds funds between calls:
+
+- **Taker side** (fires on a cheap ask):
+  `arb-book-alex-bitflow / arb-book-alex-velar (spend-btc, max-price-per-1m,
+  min-profit)` — buy MIA off the book (`market-order`, 10 bps fee fronted
+  via `buffer = spend + spend/1000`), sell MIA → STX on ALEX pool 16
+  (wSTX/wMIA, 1e8-fixed: uMIA·100 in, dx/100 uSTX out), close STX → sBTC on
+  Bitflow xyk or Velar 0070. Reverts unless
+  `sbtc-out ≥ spent + fee + min-profit`.
+- **Maker side** (after your own offer fills at a high ask):
+  `replenish-bitflow-alex / replenish-velar-alex (sbtc-in, min-mia-out)` —
+  sBTC → STX → MIA; set `min-mia-out` to at least the MIA the fill sold and
+  the pair "fill at ask, replenish" can never lose inventory.
+- `rescue` sweeps donations/dust to the deployer (audit L-1), callable by
+  anyone.
+- Swap legs lifted verbatim from the mainnet-proven
+  flatearth-arbitrage-faktory-v2; ALEX fixed-point semantics verified against
+  the live wrappers (see AUDIT.md addendum).
+- Keeper hurdle: book ask (sats/1M) < ALEX (STX/1M) × Bitflow (sats/STX)
+  minus ~0.9% fees (10 bps book + 0.5% ALEX + 0.3% close). Quote before
+  firing — the fork run shows consecutive 2M-MIA fills degrading the
+  composite fast (+262,779 sats, then +88,611, then unprofitable).
+
+- `npm run sim:arb` — **40/40** vs the LIVE book + LIVE ALEX/Bitflow/Velar:
+  [run](https://stxer.xyz/simulations/mainnet/719d98ceea74f26af3b6f6fa25b884c6).
+  Profitable taker arbs on both venues (exact cost/fee/maker deltas, caller
+  sBTC delta == reported profit), no-fill (u13019) and min-profit (u1000)
+  reverts refunding to the sat with the planted offer surviving, replenish
+  exactness on both venues, rescue sweeping a donation to the deployer, and
+  the retention invariant (contract sBTC/MIA/STX == 0) at every stage.
+- `npm run rv:arb:test` / `rv:arb:invariant` — 5 properties
+  (profit-or-exact-refund on both taker paths, u13019 propagation, replenish
+  exactness both venues) + 3 retention invariants, zero failures. Runs
+  against the local book + real-balance fixed-8 mock venues
+  (`rendezvous/mocks/`, rv-sync PATCH 8) since ALEX/Bitflow/Velar have no
+  simnet state.
+- Independent audit: **PASS, no CRIT/HIGH/MED** — payout math and every
+  `as-contract?` allowance provably exact, no redirect/reentrancy/overflow
+  vector; L-1 (stranded donations) fixed by `rescue`
+  ([`AUDIT.md`](./AUDIT.md) arb addendum).
+- Deploy at **Clarity 5** (manifest pins 6 for analysis only; mainnet
+  rejects version byte 6).
+
 ## Verification
 
 - `clarinet check` → ✔ 5 contracts (v1 trio + v2 pair; repo manifest at Clarity 6 / epoch 4.0 for analysis).

@@ -19,7 +19,7 @@
     "rv:fair-v2:invariant": "npm run rv:sync && cd rendezvous && rv . mia-fair-faktory-v2 invariant",
     "rv:single-v2:test": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory-v2 test",
     "rv:single-v2:invariant": "npm run rv:sync && cd rendezvous && rv . mia-single-faktory-v2 invariant",
-    "fuzz": "npm run rv:fair:test && npm run rv:fair:invariant && npm run rv:single:test && npm run rv:single:invariant && npm run rv:pool:test && npm run rv:pool:invariant && npm run rv:fair-v2:test && npm run rv:fair-v2:invariant && npm run rv:single-v2:test && npm run rv:single-v2:invariant && npm run rv:orderbook:test && npm run rv:orderbook:invariant && npm run rv:route:test && npm run rv:route:invariant && npm run rv:stx-route:test && npm run rv:stx-route:invariant",
+    "fuzz": "npm run rv:fair:test && npm run rv:fair:invariant && npm run rv:single:test && npm run rv:single:invariant && npm run rv:pool:test && npm run rv:pool:invariant && npm run rv:fair-v2:test && npm run rv:fair-v2:invariant && npm run rv:single-v2:test && npm run rv:single-v2:invariant && npm run rv:orderbook:test && npm run rv:orderbook:invariant && npm run rv:route:test && npm run rv:route:invariant && npm run rv:stx-route:test && npm run rv:stx-route:invariant && npm run rv:arb:test && npm run rv:arb:invariant",
     "sim:happy": "node simulations/verify-happy-path.js",
     "sim:deployed": "node simulations/verify-deployed.js",
     "sim:v2": "node simulations/verify-v2.js",
@@ -31,7 +31,10 @@
     "rv:route:invariant": "npm run rv:sync && cd rendezvous && rv . mia-to-mia-faktory invariant",
     "sim:stx-route": "node simulations/verify-stx-route.js",
     "rv:stx-route:test": "npm run rv:sync && cd rendezvous && rv . stx-to-stx-mia-faktory test",
-    "rv:stx-route:invariant": "npm run rv:sync && cd rendezvous && rv . stx-to-stx-mia-faktory invariant"
+    "rv:stx-route:invariant": "npm run rv:sync && cd rendezvous && rv . stx-to-stx-mia-faktory invariant",
+    "rv:arb:test": "npm run rv:sync && cd rendezvous && rv . mia-arb-faktory test",
+    "rv:arb:invariant": "npm run rv:sync && cd rendezvous && rv . mia-arb-faktory invariant",
+    "sim:arb": "node simulations/verify-arb.js"
   },
   "author": "",
   "license": "ISC",

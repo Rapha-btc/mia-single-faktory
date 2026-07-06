@@ -387,3 +387,61 @@ trip over 4 loops lost 4 uSTX total). Rendezvous
 `rv:stx-route:test|invariant` — 6 properties + 3 invariants (acquired
 covers spend at par, received covers burns at par, round-trip parity),
 zero failures.
+
+---
+
+## mia-arb-faktory addendum (atomic triangular arb, 2026-07-06)
+
+Static review (clarity-audit framework, independent agent pass) + behavioural
+verification: mainnet-fork simulation (`simulations/verify-arb.js`, 40/40
+against the LIVE deployed book, ALEX pool 16, Bitflow xyk and Velar 0070) and
+Rendezvous fuzzing (`rendezvous/`, PATCH 8: local book + real-balance fixed-8
+mock venues; 5 properties + 3 retention invariants, 0 failures).
+
+**Verdict: PASS** — no open findings after the L-1 fix.
+
+### Verified correct (load-bearing proofs)
+- **Payout exact, nothing stuck**: `buffer = spend + floor(spend/1000) ≥
+  cost = spent + floor(spent/1000)` for all inputs (book guarantees
+  `spent ≤ spend`); `payout = sbtc-out + (buffer − cost)` equals the
+  contract's entire end balance, so the contract zeroes out on success and
+  atomic revert refunds everything. Fuzzed (invariant-no-resting-*) and
+  fork-checked at every stage.
+- **ALEX fixed-point exact**: `token-wstx-v2`/`token-wmia` confirmed on-chain
+  as 8-dec wrappers over 6-dec bases; `dy = acquired·100` pulls exactly
+  `acquired` uMIA, `floor(dx/100)` equals the native uSTX actually delivered
+  — belief == actual, no over-credit, no dust.
+- **Allowances**: every `as-contract?` cap ≥ (usually ==) what the leg moves;
+  DEX fees come out of swap amounts, never as an extra pull.
+- **No redirection**: funds pulled from `tx-sender`, payout hardcoded to the
+  same principal — calling through an intermediary contract cannot divert.
+- **No reentrancy / overflow / div-by-zero**; Velar direct-pool arg order
+  matches the mainnet-proven flatearth arb.
+
+### Fixed in this pass
+**L-1 (LOW) — donated/stranded tokens were permanently locked — FIXED.**
+`payout` is computed, never balance-swept, so a direct donation could never
+leave. Added `rescue`: sweeps any resting sBTC/MIA/STX to `DEPLOYER`,
+callable by anyone (funds can only move to the deployer). Pinned by the
+fork sim (donate → rescue → deployer delta exact, contract zero).
+
+### Dispositions (INFO, accepted)
+- **I-1** Clarinet pins Clarity 6 for checking; mainnet deploy MUST force
+  Clarity 5 (version byte 6 is rejected — see repo memory).
+- **I-2** Per-leg min-outs are none/`u1`; `min-profit` (taker) and
+  `min-mia-out` (replenish) are the sole economic guards — sandwich pressure
+  can only force a revert. Keeper must size them.
+- **I-3** Book/pool front-run or admin pause = revert-only griefing (gas).
+- **I-4** FE/keeper should still set sBTC post-conditions on the signing
+  wallet (permissionless tx-sender funding).
+
+### Coverage map
+- `simulations/verify-arb.js` — fork: profitable taker arb (Bitflow + Velar)
+  with exact cost/fee/maker deltas; no-fill and min-profit reverts refund to
+  the sat; replenish loops exact; rescue sweep; contract retention zero at
+  every stage. Observed price-impact note: consecutive 2M-MIA fills degraded
+  the composite (arb1 +262,779 sats, arb2 +88,611, round 3 unprofitable) —
+  keepers must quote before firing.
+- `rendezvous/` — properties: profit-or-exact-refund on both taker paths,
+  u13019 propagation, replenish exactness both venues; invariants: the arb
+  contract never retains sBTC / MIA / STX.
