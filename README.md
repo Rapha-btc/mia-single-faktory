@@ -275,19 +275,28 @@ in the same tx; the contract never holds funds between calls:
   anyway. Revisit when DLMM stx-sbtc TVL grows or the MIA leg stops being
   the bottleneck.
 
-- `npm run sim:arb` — **40/40** vs the LIVE book + LIVE ALEX/Bitflow/Velar:
-  [run](https://stxer.xyz/simulations/mainnet/719d98ceea74f26af3b6f6fa25b884c6).
+- `npm run sim:arb` — **40/40** vs the LIVE book + LIVE ALEX/Bitflow/Velar
+  (latest code incl. the DLMM venue):
+  [run](https://stxer.xyz/simulations/mainnet/c53a9a446c5835956bb8fc575edf3e49).
   Profitable taker arbs on both venues (exact cost/fee/maker deltas, caller
   sBTC delta == reported profit), no-fill (u13019) and min-profit (u1000)
   reverts refunding to the sat with the planted offer surviving, replenish
   exactness on both venues, rescue sweeping a donation to the deployer, and
   the retention invariant (contract sBTC/MIA/STX == 0) at every stage.
-- `npm run rv:arb:test` / `rv:arb:invariant` — 5 properties
-  (profit-or-exact-refund on both taker paths, u13019 propagation, replenish
-  exactness both venues) + 3 retention invariants, zero failures. Runs
-  against the local book + real-balance fixed-8 mock venues
-  (`rendezvous/mocks/`, rv-sync PATCH 8) since ALEX/Bitflow/Velar have no
-  simnet state.
+- `node simulations/verify-arb-venues.js` — full-circle venue race, one
+  fresh fork per venue, same 2M-MIA plant, main-contract functions:
+  bitflow **262,779** ([run](https://stxer.xyz/simulations/mainnet/12d2d75bd4339c5b4741a5f0c71165a5))
+  > velar **262,092** ([run](https://stxer.xyz/simulations/mainnet/e86f3842ec87d55782101975928cbfd6))
+  > dlmm-direct **255,149** ([run](https://stxer.xyz/simulations/mainnet/fcf83c57fc68a61c6e9c76f683b7eac3))
+  > dlmm-2hop-USDCx **254,205** sats profit
+  ([run](https://stxer.xyz/simulations/mainnet/02a731b6c0a72b1fc02fae4626abc02d);
+  2-hop is sim-only, `simulations/mia-arb-dlmm-sim.clar`).
+- `npm run rv:arb:test` / `rv:arb:invariant` — 6 properties
+  (profit-or-exact-refund on all three taker paths incl. DLMM, u13019
+  propagation, replenish exactness both venues) + 3 retention invariants,
+  zero failures. Runs against the local book + real-balance fixed-8 mock
+  venues (`rendezvous/mocks/`, rv-sync PATCH 8) since
+  ALEX/Bitflow/Velar/DLMM have no simnet state.
 - Independent audit: **PASS, no CRIT/HIGH/MED** — payout math and every
   `as-contract?` allowance provably exact, no redirect/reentrancy/overflow
   vector; L-1 (stranded donations) fixed by `rescue`
