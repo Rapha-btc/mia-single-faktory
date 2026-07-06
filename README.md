@@ -252,6 +252,21 @@ in the same tx; the contract never holds funds between calls:
   minus ~0.9% fees (10 bps book + 0.5% ALEX + 0.3% close). Quote before
   firing — the fork run shows consecutive 2M-MIA fills degrading the
   composite fast (+262,779 sats, then +88,611, then unprofitable).
+- **Future venue — Bitflow DLMM (revisit if TVL grows)**: measured on a fork
+  (block 8496753, 200k sats sBTC→STX): DLMM direct
+  `SM1FKX….dlmm-pool-stx-sbtc-v-1-bps-15` 740.04 STX (BEST — 15 bps fee,
+  active bins cover micro size despite ~$7K TVL) > xyk 738.43 (current) >
+  Velar 737.15 > DLMM 2-hop via the deep USDCx pools 736.30 (WORST — two
+  spreads + two fees eat the bps saving). On-chain execution exists:
+  `SM1FKX….dlmm-swap-router-v-1-2` `swap-*-simple-multi (pool, x-token,
+  y-token, amount, min-out, deadline)` walks bins internally and returns
+  `{in, out}` — integration is mechanical, but the leg MUST assert
+  `in == amount` (bin-exhaustion partial fills would otherwise strand the
+  remainder and break profit-or-revert / exact-allowance). Deferred: the
+  ~0.2% edge over xyk only holds at micro size (thin pool degrades fastest
+  as bins exhaust), and fills are capped by the ALEX pool-16 MIA depth
+  anyway. Revisit when DLMM stx-sbtc TVL grows or the MIA leg stops being
+  the bottleneck.
 
 - `npm run sim:arb` — **40/40** vs the LIVE book + LIVE ALEX/Bitflow/Velar:
   [run](https://stxer.xyz/simulations/mainnet/719d98ceea74f26af3b6f6fa25b884c6).
