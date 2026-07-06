@@ -113,6 +113,7 @@ sed -i \
   -e "s/'SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM\.amm-pool-v2-01/.mock-alex/" \
   -e "s/'SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR\.xyk-core-v-1-2/.mock-xyk/" \
   -e "s/'SP20X3DC5R091J8B6YPQT638J8NR1W83KN6TN5BJY\.univ2-pool-v1_0_0-0070/.mock-velar/" \
+  -e "s/'SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD\.dlmm-swap-router-v-1-2/.mock-dlmm/" \
   rendezvous/contracts/mia-arb-faktory.clar
 
 echo "rendezvous/contracts synced (9 contracts + 3 mocks, 8 test-only patches)"

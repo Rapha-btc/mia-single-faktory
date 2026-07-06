@@ -252,6 +252,13 @@ in the same tx; the contract never holds funds between calls:
   minus ~0.9% fees (10 bps book + 0.5% ALEX + 0.3% close). Quote before
   firing — the fork run shows consecutive 2M-MIA fills degrading the
   composite fast (+262,779 sats, then +88,611, then unprofitable).
+- **Third taker venue — DLMM direct**: `arb-book-alex-dlmm` closes on
+  `SM1FKX….dlmm-pool-stx-sbtc-v-1-bps-15` via the DLMM swap router; the leg
+  asserts `in == amount` (ERR-PARTIAL-FILL u1002) so bin-exhaustion partial
+  fills revert. Currently ~1.6% behind xyk at real fill sizes (fork race:
+  255,149 vs 262,779 sats profit) — wired for when the pool deepens or for
+  micro fills; `simulations/verify-arb-venues.js` re-races all venues in
+  one command.
 - **Future venue — Bitflow DLMM (revisit if TVL grows)**: measured on a fork
   (block 8496753, 200k sats sBTC→STX): DLMM direct
   `SM1FKX….dlmm-pool-stx-sbtc-v-1-bps-15` 740.04 STX (BEST — 15 bps fee,

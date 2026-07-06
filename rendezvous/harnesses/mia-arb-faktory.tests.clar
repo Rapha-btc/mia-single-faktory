@@ -43,6 +43,8 @@
     (try! (contract-call? .mock-xyk fund-stx u50000000000))
     (try! (contract-call? .mock-velar fund-sbtc u100000000))
     (try! (contract-call? .mock-velar fund-stx u50000000000))
+    (try! (contract-call? .mock-dlmm fund-sbtc u100000000))
+    (try! (contract-call? .mock-dlmm fund-stx u50000000000))
     (ok true)
   )
 )
@@ -186,6 +188,44 @@
 )
 
 (define-read-only (can-test-arb-velar
+    (spend uint)
+    (ask uint)
+    (min-profit uint)
+  )
+  (can-test-arb-bitflow spend ask min-profit)
+)
+
+;; taker arb, DLMM direct close (in == amount guard exercised on every fill)
+(define-private (test-arb-dlmm
+    (spend uint)
+    (ask uint)
+    (min-profit uint)
+  )
+  (let (
+      (spend2 (+ u1000 (mod spend u10000000)))
+      (mp (mod min-profit u1000000))
+    )
+    (try! (rv-seed-mocks))
+    (try! (rv-plant-offer spend2 ask))
+    (let ((seeded (rv-sbtc-of tx-sender)))
+      (match (arb-book-alex-dlmm spend2 u999999999999 mp)
+        r (begin
+          (asserts! (>= (get profit r) mp) (err u975))
+          (asserts! (>= (rv-sbtc-of tx-sender) (+ seeded (get profit r))) (err u976))
+          (asserts! (rv-contract-empty) (err u977))
+          (ok true)
+        )
+        e (begin
+          (asserts! (is-eq (rv-sbtc-of tx-sender) seeded) (err u978))
+          (asserts! (rv-contract-empty) (err u979))
+          (ok true)
+        )
+      )
+    )
+  )
+)
+
+(define-read-only (can-test-arb-dlmm
     (spend uint)
     (ask uint)
     (min-profit uint)

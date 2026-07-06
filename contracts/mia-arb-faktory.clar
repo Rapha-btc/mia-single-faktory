@@ -11,6 +11,7 @@
 
 (define-constant ERR-NO-PROFIT (err u1001))
 (define-constant ERR-SLIPPAGE (err u1000))
+(define-constant ERR-PARTIAL-FILL (err u1002))
 
 (define-constant DEPLOYER tx-sender)
 
@@ -96,6 +97,54 @@
       ))
       (print { notification: "mia-arb", payload: {
         venue: "velar", caller: caller, buffer: buffer, cost: cost,
+        acquired: acquired, ustx: ustx-out, sbtc-out: sbtc-out,
+        profit: (- sbtc-out cost),
+      } })
+      (ok { cost: cost, acquired: acquired, sbtc-out: sbtc-out, profit: (- sbtc-out cost) })
+    )
+  )
+)
+
+;; Same circle, closing on the Bitflow DLMM direct stx-sbtc pool via the
+;; dlmm-swap-router. Best venue only at micro size while the pool is thin
+;; (~$7K TVL 2026-07-06, 15 bps): the fork race at 2M-MIA fills has it ~1.6%
+;; behind xyk (255,149 vs 262,779 sats profit) because leg 3 walks out of
+;; the active bin. The DLMM leg asserts in == amount so a bin-exhaustion
+;; partial fill reverts instead of stranding STX.
+(define-public (arb-book-alex-dlmm
+    (spend-btc uint)
+    (max-price-per-1m uint)
+    (min-profit uint)
+  )
+  (let (
+      (caller tx-sender)
+      (buffer (+ spend-btc (/ spend-btc u1000)))
+    )
+    (try! (contract-call? SBTC-TOKEN transfer buffer tx-sender current-contract none))
+    (let (
+        (book (try! (as-contract? ((with-ft SBTC-TOKEN "sbtc-token" buffer))
+          (try! (contract-call?
+            'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-orderbook-faktory
+            market-order spend-btc max-price-per-1m
+          ))
+        )))
+        (cost (+ (get spent book) (get fee book)))
+        (acquired (get acquired book))
+        (ustx-out (try! (as-contract? ((with-ft MIA-TOKEN "miamicoin" acquired))
+          (try! (swap-mia-to-stx-alex acquired))
+        )))
+        (sbtc-out (try! (as-contract? ((with-stx ustx-out))
+          (try! (swap-stx-to-sbtc-dlmm ustx-out))
+        )))
+        (payout (+ sbtc-out (- buffer cost)))
+      )
+      (asserts! (> sbtc-out cost) ERR-NO-PROFIT)
+      (asserts! (>= sbtc-out (+ cost min-profit)) ERR-SLIPPAGE)
+      (try! (as-contract? ((with-ft SBTC-TOKEN "sbtc-token" payout))
+        (try! (contract-call? SBTC-TOKEN transfer payout current-contract caller none))
+      ))
+      (print { notification: "mia-arb", payload: {
+        venue: "dlmm", caller: caller, buffer: buffer, cost: cost,
         acquired: acquired, ustx: ustx-out, sbtc-out: sbtc-out,
         profit: (- sbtc-out cost),
       } })
@@ -192,6 +241,25 @@
       none
     ))))
     (ok (/ (get dy result) u100))
+  )
+)
+
+;; DLMM stx-sbtc pool is keyed (x = STX, y = sBTC): STX in is x-for-y. The
+;; router walks bins internally and reports {in, out}; if liquidity exhausts
+;; mid-walk `in` < ustx, so assert full consumption and revert on partials.
+(define-private (swap-stx-to-sbtc-dlmm (ustx uint))
+  (let ((res (try! (contract-call?
+      'SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD.dlmm-swap-router-v-1-2
+      swap-x-for-y-simple-multi
+      'SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD.dlmm-pool-stx-sbtc-v-1-bps-15
+      'SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR.token-stx-v-1-2
+      'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token
+      ustx
+      u1
+      none
+    ))))
+    (asserts! (is-eq (get in res) ustx) ERR-PARTIAL-FILL)
+    (ok (get out res))
   )
 )
 

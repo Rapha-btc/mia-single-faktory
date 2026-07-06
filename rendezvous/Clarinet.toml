@@ -73,6 +73,11 @@ path = "contracts/mock-velar.clar"
 clarity_version = 6
 epoch = "4.0"
 
+[contracts.mock-dlmm]
+path = "contracts/mock-dlmm.clar"
+clarity_version = 6
+epoch = "4.0"
+
 [contracts.mia-arb-faktory]
 path = "contracts/mia-arb-faktory.clar"
 clarity_version = 6
