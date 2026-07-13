@@ -77,6 +77,14 @@ path = "contracts/stx-to-stx-mia-faktory.clar"
 clarity_version = 6
 epoch = "4.0"
 
+# v2 of the machine: operator allowlist (admin + SP21..FFP rewards), atomic
+# run() loop with withdraw-to-caller, settle budget capped by live ccd013
+# redemption headroom (no stranding against a dry treasury).
+[contracts.stx-to-stx-mia-faktory-v2]
+path = "contracts/stx-to-stx-mia-faktory-v2.clar"
+clarity_version = 5
+epoch = "4.0"
+
 # jing orderbook: mia-fair-v2 minus the par machinery — plain 50-deep MIA v2
 # sell book priced in sBTC, admin-settable min deposit, settler keeps all.
 [contracts.mia-orderbook-jing]
