@@ -85,6 +85,13 @@ path = "contracts/stx-to-stx-mia-faktory-v2.clar"
 clarity_version = 5
 epoch = "4.0"
 
+# one-tx v1->v2 closer: churn old machine + withdraw its STX (FASTPOOL
+# only) + run-loops on v2 with recovered + extra capital.
+[contracts.stx-to-stx-migrate]
+path = "contracts/stx-to-stx-migrate.clar"
+clarity_version = 5
+epoch = "4.0"
+
 # jing orderbook: mia-fair-v2 minus the par machinery — plain 50-deep MIA v2
 # sell book priced in sBTC, admin-settable min deposit, settler keeps all.
 [contracts.mia-orderbook-jing]

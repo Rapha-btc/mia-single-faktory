@@ -87,10 +87,41 @@ is literally that contract's STX balance), and clear the drifting live
 book with a big run before exact-math acts so expectations depend only on
 offers the sim places.
 
+## verify-migrate.js - stx-to-stx-migrate (15/15)
+
+`contracts/stx-to-stx-migrate.clar`: one-tx lifecycle closer, deployed
+AFTER v2. In a single fastpool.btc-signed transaction: churn the OLD
+machine (redeeming its stranded 8,187.134502 MIA escrow when the treasury
+allows), withdraw the old machine's STX, and run-loops on v2 with
+recovered + extra capital. Without this, the 14 STX can never reliably
+leave v1: any standalone redeem parks STX there, where the next trigger's
+settle re-strands it (v1 has no treasury guard and no auto-withdraw).
+
+Two entry points:
+- migrate-and-run(extra, cycles): churn old + withdraw old (FASTPOOL leg)
+  + v2 run-loops. fastpool.btc's full collect.
+- churn-and-run(extra, cycles): churn old WITHOUT the withdraw - the
+  redeemed ~14 STX PARKS in the old machine - + v2 run-loops. Lets
+  SP21..FFP consume a tranche the moment its reward flow funds one; the
+  parked STX is re-strandable by old-machine triggers while headroom
+  remains (accepted trade), collected later by fastpool.btc.
+
+Runs:
+- https://stxer.xyz/simulations/mainnet/2bebc3977adf0ce2a63ad450cd1af557 -
+  15/15, migrate-and-run only.
+- https://stxer.xyz/simulations/mainnet/9ebead89997b1b8ee2a00f190a4a92a3 -
+  **20/20 FINAL**, the full two-wallet lifecycle: strangers revert on both
+  entry points; SP21 churn-and-run parks exactly u13999999 in the old
+  machine and runs v2 with fresh capital; fastpool.btc migrate-and-run
+  collects the parked 14 (recovered u13999998 - 1 uSTX of churn dust) and
+  finishes the book; SP21 post-drain path reports old-parked u0.
+  FASTPOOL net +13,999,995 uSTX; every machine ends 0/0.
+
 ## deploy notes
 
-- Deploy `stx-to-stx-mia-faktory-v2` under SPV9K21 at **Clarity 5**
-  (mainnet rejects 6); `.mia-fair-faktory-v2` resolves to the live book.
+- Deploy `stx-to-stx-mia-faktory-v2` then `stx-to-stx-migrate` under
+  SPV9K21 at **Clarity 5** (mainnet rejects 6); relative refs resolve to
+  the live book / live v1 / freshly deployed v2.
 - The v1 machine winds down on its own: it holds 8,187.134502 MIA escrow
   (the "14 STX") which redeems at the next ccd013 tranche via anyone's
   `settle-and-redeem(u0)`, withdrawable only by `SP3KJB...`.
