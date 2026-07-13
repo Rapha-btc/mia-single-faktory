@@ -25,6 +25,9 @@ requirements = [
     { contract_id = 'SP1Y5YSTAHZ88XYK1VPDH24GY0HPX5J4JECTMY4A1.wstx' },
     { contract_id = 'SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD.dlmm-swap-router-v-1-2' },
     { contract_id = 'SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD.dlmm-pool-stx-sbtc-v-1-bps-15' },
+    # stx-to-stx-wrapper drives the DEPLOYED machine + fair book
+    { contract_id = 'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-fair-faktory-v2' },
+    { contract_id = 'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.stx-to-stx-mia-faktory' },
 ]
 
 # ---------------------------------------------------------------------------
@@ -87,6 +90,11 @@ epoch = "4.0"
 [contracts.mia-arb-faktory]
 path = "contracts/mia-arb-faktory.clar"
 clarity_version = 6
+epoch = "4.0"
+
+[contracts.stx-to-stx-wrapper]
+path = "contracts/stx-to-stx-wrapper.clar"
+clarity_version = 5
 epoch = "4.0"
 
 # NOTE: contracts/reference/*.clar are unmodified on-chain copies kept ONLY for
