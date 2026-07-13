@@ -143,17 +143,14 @@ the machine (5 orders of magnitude below one MIA).
 Run: https://stxer.xyz/simulations/mainnet/fced328476d1a5713e29e9ec621fb8d5
 - 33 passed, 0 failed.
 
-## live validation
+## reading the sim transactions
 
-Deployed and battle-used 2026-07-13/14. Friedger's first real
-churn-and-run from the rewards address:
-https://explorer.hiro.so/txid/1ab88857d23af19ddaad61d7207157d5486a7d4652452d9017339724e89765bc
-- the old machine's 8,187.134502 MIA escrow redeemed (13.999999 STX now
-parked for fastpool.btc), then a 1,000 STX deposit recycled through 5
-cycles consuming ~5,000 STX of book across 4 sellers, withdrawn
-999.999995 - the same 1-uSTX-per-redeem dust and 5x capital efficiency
-the fork runs predicted. UI sizing note: inputs up to ~17,100 STX (10M
-MIA at par, the per-cycle redeem cap) always end the run with an empty
+The individual transactions inside each stxer session (e.g. the SP21
+churn-and-run or the fastpool migrate-and-run) can be opened in the stxer
+viewer and read event-by-event like real txs - same explorer format, same
+event logs. NOT MAINNET: v2 and migrate are not deployed yet; every tx id
+from these sessions is fork-only. UI sizing note: inputs up to ~17,100 STX
+(10M MIA at par, the per-cycle redeem cap) always end a run with an empty
 machine; larger runs may roll redeemable MIA to the next run if the
 treasury drains mid-run (S4) - safe, visible in the result, self-healing.
 
