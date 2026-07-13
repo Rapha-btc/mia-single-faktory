@@ -110,12 +110,52 @@ Runs:
 - https://stxer.xyz/simulations/mainnet/2bebc3977adf0ce2a63ad450cd1af557 -
   15/15, migrate-and-run only.
 - https://stxer.xyz/simulations/mainnet/9ebead89997b1b8ee2a00f190a4a92a3 -
-  **20/20 FINAL**, the full two-wallet lifecycle: strangers revert on both
+  **20/20 FINAL**, the full two-wallet lifecycle (re-verified fresh
+  2026-07-13 evening: 5c75f0f0..., 20/20): strangers revert on both
   entry points; SP21 churn-and-run parks exactly u13999999 in the old
   machine and runs v2 with fresh capital; fastpool.btc migrate-and-run
   collects the parked 14 (recovered u13999998 - 1 uSTX of churn dust) and
   finishes the book; SP21 post-drain path reports old-parked u0.
   FASTPOOL net +13,999,995 uSTX; every machine ends 0/0.
+
+## verify-v2-scenarios.js - edge-scenario suite (33/33)
+
+Six states the happy path never reaches:
+
+- S1 cycle-cap abuse: run-loops(u0, u99) is a harmless no-op (unroll caps at 5)
+- S2 parity: run(X) returns byte-identical results to run-loops(X, u1)
+- S3 partial treasury: with 2,000 headroom against a 3,000 ask, F-3 caps the
+  settle to EXACTLY the headroom via fair-v2's frontier partial fill; the
+  book keeps the remainder; stranded MIA is sub-0.001-MIA rounding dust
+- S4 redeem-cap spillover: two 7M offers summed in one settle exceed the
+  10M-per-redeem cap while the treasury drains mid-run - the ONE state
+  where v2 legitimately ends holding MIA (1,695,906.43 MIA here), and
+  conservation holds exactly: deposited == withdrawn + par(escrow)
+- S5 donation sweep: naked STX sent to the machine comes out via run(u0)
+  even with a dry treasury, without touching the escrow
+- S6 withdraw gates: strangers get u9000 on withdraw-stx / withdraw-mia
+
+Found along the way: fair-v2's place-offer caps single offers at 10M MIA
+(u13013), so no single offer can exceed the redeem cap - spillover needs
+multiple offers in one pass. And partial fills leave <= ~600 uMIA dust in
+the machine (5 orders of magnitude below one MIA).
+
+Run: https://stxer.xyz/simulations/mainnet/fced328476d1a5713e29e9ec621fb8d5
+- 33 passed, 0 failed.
+
+## live validation
+
+Deployed and battle-used 2026-07-13/14. Friedger's first real
+churn-and-run from the rewards address:
+https://explorer.hiro.so/txid/1ab88857d23af19ddaad61d7207157d5486a7d4652452d9017339724e89765bc
+- the old machine's 8,187.134502 MIA escrow redeemed (13.999999 STX now
+parked for fastpool.btc), then a 1,000 STX deposit recycled through 5
+cycles consuming ~5,000 STX of book across 4 sellers, withdrawn
+999.999995 - the same 1-uSTX-per-redeem dust and 5x capital efficiency
+the fork runs predicted. UI sizing note: inputs up to ~17,100 STX (10M
+MIA at par, the per-cycle redeem cap) always end the run with an empty
+machine; larger runs may roll redeemable MIA to the next run if the
+treasury drains mid-run (S4) - safe, visible in the result, self-healing.
 
 ## deploy notes
 
