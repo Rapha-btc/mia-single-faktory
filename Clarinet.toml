@@ -112,6 +112,15 @@ path = "contracts/stx-to-stx-wrapper.clar"
 clarity_version = 5
 epoch = "4.0"
 
+# cycle runbook bundle: one tx = ccd013 redeem-mia on the CALLER's own leftover
+# MIA (burning first shrinks the treasury below the 17,100 STX per-pass
+# ceiling) + stx-to-stx-mia-faktory-v2 run-loops at a pinned cap. No custody,
+# no as-contract - tx-sender flows through both legs.
+[contracts.mia-burn-and-run]
+path = "contracts/mia-burn-and-run.clar"
+clarity_version = 6
+epoch = "4.0"
+
 # NOTE: contracts/reference/*.clar are unmodified on-chain copies kept ONLY for
 # side-by-side diffing. They call mainnet contracts not in requirements, so they
 # are intentionally excluded from the build.
