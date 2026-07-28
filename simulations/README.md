@@ -165,3 +165,103 @@ treasury drains mid-run (S4) - safe, visible in the result, self-healing.
 - Rerun `node simulations/verify-v2-machine.js` before deploying if days
   have passed - CLEANUP (30,000 STX) must stay above the live book's
   total asks (~13,400 at authoring).
+
+## mia-burn-and-run
+
+`burn-and-run(umia, ustx, cycles)` burns the CALLER's leftover MIA through
+ccd013, then runs `stx-to-stx-mia-faktory-v2.run-loops` in up to 5 capped
+passes - both legs in ONE transaction, so there is no gap for a racer to
+take the headroom the burn frees. Born from cycle 139 (0x491e1f6c,
+5,526.232964 STX taken two blocks later).
+
+DEPLOYED 2026-07-28 at burn 960,027, tx `0xb06bd4d5c6eda48234c6f060fae496b2bd4d2635509728e8ebfcbcc0dd2a6581`
+-> `SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.mia-burn-and-run`, Clarity 5,
+1,422 bytes, source sha256 `68d9c6c6188ba027...` (verified byte-identical
+to `contracts/mia-burn-and-run.clar`).
+
+All three harnesses use the same live state: fair-v2 book 34,270,999.305234
+MIA asking 54,275.3936 STX, machine empty, ccd013 redemption balance **0**
+(so every run funds `ccd002-treasury-mia-rewards-v3.deposit-stx` first),
+FASTPOOL holding 3,231,716.020625 MIA and 11.667164 STX. The burn amount is
+exactly what he withdrew at burn 959,973 (`withdraw-mia u3231715183625`).
+
+### verify-burn-and-run.js - thin treasury, the literal ask
+
+Treasury funded to EXACTLY 17,100 STX, then burn + 5 cycles.
+
+Run: https://stxer.xyz/simulations/mainnet/dbb762b1f32ca6ab6854e60db0c09f60
+- 12 passed, 1 failed (the failure is the assertion, not the contract - see
+  the dust note below).
+
+Shows that the two legs COMPETE for one treasury: the burn takes 5,526.232963
+out first, leaving only 11,573.767037 for the settle pass, so just that much
+book clears and the treasury ends at 0. For a FULL 17,100 pass after the burn
+you need 22,626.23 in the treasury - which is exactly the `run u22626232964`
+SP21..FFP fired at burn 959,970. Act B tops up by 30,000 and clears a further
+30,000 STX of offers, returning the whole float.
+
+Dust: 584 uMIA (0.000584 MIA, worth 0.000999 STX) stays in the machine. Cause
+is a starved treasury, not a flaw - the last passes ran on a 1 uSTX budget,
+and both the par-equiv and the redemption floor their integer division, so a
+sub-unit pass acquires slightly more MIA than it can redeem. It never happens
+with real headroom (see below), and any operator can `withdraw-mia` it.
+
+### verify-burn-and-run-full.js - fat treasury, the loop actually recycles
+
+Treasury funded to 100,000 STX (deliberate overkill), then burn + 5 cycles.
+Takes an optional `[umia]` argv - pass `0` to skip the burn leg.
+
+Run (burn): https://stxer.xyz/simulations/mainnet/c0dcd1fa876be2e3ce8460c83543d277
+- 10 passed, 0 failed.
+Run (umia = 0): https://stxer.xyz/simulations/mainnet/140f378386888ea38858cdd7985ce6a2
+- 10 passed, 0 failed.
+
+```
+book consumed        54,275.3936 STX of offers  ->  book EMPTY (0 offers)
+passes implied       3.17 x 17,100
+treasury drained     59,801.626562 STX   (5,526.23 paid for his burn
+                                          + 54,275.39 paid for the machine's)
+treasury left over   40,198.373438 STX
+FASTPOOL net         +5,526.232962 STX   float returned, gain == burn proceeds
+fair-v2 surplus      +2,531,003.047925 MIA
+machine after        0 STX, 0 MIA        (no dust - every pass had real headroom)
+```
+
+Three things this pins down:
+
+- **The float recycles.** 17,100 STX of float cleared 54,275 STX of book -
+  3.17x its own size, because each pass's redemption funds the next.
+- **Over-asking on `cycles` is safe.** `get-plan` returned `cycles u5`, ~4
+  were useful, the 5th found an empty book and no-oped through `(ok none)`
+  on both legs. Result still `(ok ...)` with the full withdrawal.
+- **The limiting factor flips.** Thin treasury -> the treasury caps you. Fat
+  treasury -> the BOOK does: 5 passes could absorb 85,500 STX and the whole
+  live book is only 54,275.
+
+The `umia = 0` run confirms `maybe-burn`'s `(if (> umia u0) ... (ok false))`
+guard: the ccd013 call is skipped entirely rather than erroring, so the same
+entry point works on a cycle with no rollover MIA. Run leg is identical either
+way; the only delta is the 5,526.23 STX the treasury pays him for his own MIA,
+which is his to claim whether or not he runs the machine. The cleanup itself
+costs him nothing but the fee.
+
+### verify-burn-and-run-deployed.js - the live bytecode
+
+Same scenario as `-full`, with NO deploy step, so it exercises the exact
+contract fastpool will call.
+
+Run: https://stxer.xyz/simulations/mainnet/f696f4c5181fd6be22d6d5e3e6a68d44
+- 10 passed, 0 failed, numbers identical to the pre-deploy run.
+
+### operating it
+
+`get-plan(who)` returns what to pass: `umia` = the caller's full MIA balance,
+`ustx` = 17,100 STX (the ceiling: 10M MIA, the ccd013 per-call cap, priced at
+the frozen ratio 1710), `cycles` = treasury / ceiling rounded up, capped at 5.
+`redeems-first` previews how much the burn leg will take out of the treasury
+before the run leg sees it - i.e. `min(what your MIA is worth, what the
+treasury can pay)`.
+
+**The mainnet redemption treasury is 0 as of burn 960,020.** With a dry
+treasury `burn-and-run` still succeeds but no-ops: no burn payout, no settle,
+float straight back. It does real work only on a tranche day.
