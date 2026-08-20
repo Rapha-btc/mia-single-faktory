@@ -265,3 +265,61 @@ treasury can pay)`.
 **The mainnet redemption treasury is 0 as of burn 960,020.** With a dry
 treasury `burn-and-run` still succeeds but no-ops: no burn payout, no settle,
 float straight back. It does real work only on a tranche day.
+
+## MIA/sBTC pool seeding & single-sided window (2026-08-19/20)
+
+Four self-verifying harnesses for the live seeding of `mia-pool-faktory` via
+`mia-fair-faktory-v2.seed-single-sided` and the community window on
+`mia-single-faktory-v2`. All run against LIVE mainnet state (no deploys) with
+tip-fetch pointed at the signer box to dodge Hiro 429s.
+
+### verify-seed-order.js - the full runbook, pre-init
+
+From the sealed-pool state: add-liquidity blocked (u403) before
+`initialize-pool`, stranger init blocked, deployer init lands the market
+ratio EXACTLY (18,000 sats / 86,882,580,000 micro = 4.82681 MIA/sat = Alex
+909.4685 MIA/STX x 188.42 sats/STX), swaps revert u403 for everyone while
+gated, `seed-single-sided(u6548921827191)` drains the fair book's surplus to
+zero, deposits pair at the frozen price, direct adds are ratio-neutral
+(exact rational compare), early withdraw u407, `set-gated(false)` is
+deployer-only and the next swap clears.
+
+Run: https://stxer.xyz/simulations/mainnet/f03c33a8805e14ca6d6f3ea424ca2e2d
+- 23 passed, 0 failed. (Historical: init + seed have since been executed on
+  mainnet with exactly these uints.)
+
+### verify-deposit-200k.js - one depositor, whole lifecycle
+
+From live post-seed state: `deposit-sbtc-for-lp(u202000)` (LP units are 1:1
+with sats while gated) pulls exactly 202,000 sats + 975,015.62 MIA from the
+escrow, price bit-identical after, early withdraw u407, advance 12,961 burn
+blocks, withdraw pays exactly 60% of each leg (120,000 sats + 579,217.2 MIA),
+double-withdraw u408, then the gate-opening preview.
+
+Run: https://stxer.xyz/simulations/mainnet/e9133db2a12b44a17f21960839f201b7
+- 12 passed, 0 failed. (The real 202k deposit later confirmed on mainnet:
+  0x138e5d47ba267a1f7df48da0f6e8571e675c3f321a98d4b7b39386249f8306b4.)
+
+### verify-six-depositors.js - batch dust + max deposits + all withdrawals
+
+One send-many tx dusts six sats-only wallets with 0.5 STX, each deposits its
+exact sBTC balance (20,890 / 102,071 / 26,640 / 95,082 / 42,301 / 40,497),
+every wallet drains to 0 sats with entitlement == balance, pool price
+bit-identical, escrow debited exactly what the pool gained (1,580,688.57
+MIA), and after the lock all six withdraw exactly 60% of their sats plus the
+MIA leg.
+
+Run: https://stxer.xyz/simulations/mainnet/198f2f2b9877dcb9a72511d9902dc0c8
+- 46 passed, 0 failed.
+
+### verify-redeposit.js - same address deposits twice
+
+60k then 80k sats from one wallet: entitlement accumulates 60,000 ->
+140,000 (`map-set` adds, never overwrites), one post-lock withdraw returns
+`(ok u140000)` paying exactly 60% of the COMBINED position on both legs
+(84,000 sats + 405,452.04 MIA = 60% of the summed token-needed quotes),
+entitlement cleared, second withdraw u408. The global unlock is
+creation-block + 12,960 - later deposits do NOT extend the lock.
+
+Run: https://stxer.xyz/simulations/mainnet/8acc57ea1943ea56642b67896e8f3ce9
+- 11 passed, 0 failed.
